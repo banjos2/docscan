@@ -3,7 +3,7 @@ import { isoDate, REQUIRED, TEXT_KEYS, type Values } from "./anketa"
 export type Errors = Partial<Record<keyof Values, string>>
 
 // Helvetica in the PDF encodes WinAnsi; Latin-1 is its safe subset.
-const LATIN = /^[\x20-\x7E -ÿ]*$/
+const LATIN = /^[\x20-\x7E\xA0-\xFF]*$/
 
 function addMonths(iso: string, months: number): string {
   const [y, m, d] = iso.split("-").map(Number)

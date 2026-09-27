@@ -68,7 +68,9 @@ export function extract(rows: string[], today = new Date()): { values: Partial<V
   const fields = r.fields as Record<string, string | null | undefined>
   const detail = (field: string) => r.details.find((d) => d.field === field)
   // Invalid fields come back as null; fall back to the raw characters so the user can fix them.
-  const text = (field: string) => (fields[field] ?? detail(field)?.ranges[0]?.raw.replace(/</g, " ") ?? "").trim()
+  // `raw` exists at runtime but is missing from the mrz package's Range type.
+  const raw = (field: string) => (detail(field)?.ranges[0] as { raw?: string } | undefined)?.raw?.replace(/</g, " ")
+  const text = (field: string) => (fields[field] ?? raw(field) ?? "").trim()
   // Needs review if the field or its check digit failed, or the parser had to autocorrect it.
   const src = (field: string): Source => {
     const d = detail(field)

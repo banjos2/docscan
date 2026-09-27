@@ -56,6 +56,9 @@ test("validate requires key fields and Latin-1 text", () => {
   const { errors } = validate({ ...emptyValues(TODAY), placeOfBirth: "Минск" }, TODAY)
   expect(Object.keys(errors).sort()).toEqual(["birthDate", "docNumber", "expiryDate", "firstName", "nationality", "placeOfBirth", "surname"])
   expect(errors.placeOfBirth).toBe("Анкета заполняется латиницей")
+  // Covering: DEL (0x7F) and C1 control (0x85) must be rejected
+  expect(validate({ ...emptyValues(TODAY), address1: `Berlin${String.fromCharCode(0x7f)}` }, TODAY).errors.address1).toBe("Анкета заполняется латиницей")
+  expect(validate({ ...emptyValues(TODAY), address1: `Berlin${String.fromCharCode(0x85)}` }, TODAY).errors.address1).toBe("Анкета заполняется латиницей")
 })
 
 test("validate warns about passport validity", () => {
