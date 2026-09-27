@@ -11,7 +11,7 @@
 | Вопрос | Решение |
 |---|---|
 | Где работает распознавание | В браузере. Бэкенда нет, фото не покидает устройство. |
-| OCR | `@paddleocr/paddleocr-js` (официальный SDK PaddleOCR, PP-OCRv5 mobile det/rec, onnxruntime-web, WASM). |
+| OCR | `@paddleocr/paddleocr-js` (официальный SDK PaddleOCR, PP-OCRv5 mobile det + `en_PP-OCRv5_mobile_rec`, onnxruntime-web, WASM). |
 | Разбор MRZ | npm `mrz`: TD1/TD2/TD3, контрольные цифры, автокоррекция. |
 | Набор полей | Пункты 1–16 из документа плюс все поля, заполненные в образце. |
 | Заполнение PDF | `pdf-lib` впечатывает текст по координатам поверх чистого бланка. |
@@ -83,7 +83,7 @@
 ## Распознавание: поток данных
 
 1. Файл → `ImageBitmap`.
-2. `PaddleOCR.create({ textDetectionModelName: "PP-OCRv5_mobile_det", textRecognitionModelName: "PP-OCRv5_mobile_rec", worker: true, ortOptions: { backend: "wasm" } })`. Экземпляр создаётся один раз и переиспользуется. Модели лежат в `public/models/`, чтобы не зависеть от серверов Baidu.
+2. `PaddleOCR.create({ textDetectionModelName: "PP-OCRv5_mobile_det", textRecognitionModelName: "en_PP-OCRv5_mobile_rec", worker: true, ortOptions: { backend: "wasm" } })`. Экземпляр создаётся один раз и переиспользуется. Распознаватель английский: словарь из ASCII с `<`, без иероглифов-двойников, вдвое легче стандартного. Модели — официальные ONNX-версии PaddlePaddle с Hugging Face, упакованные в `.tar` и лежащие в `public/models/`: серверы Baidu из сети разработки недоступны.
 3. `predict(bitmap)` → строки `{ text, score, poly }`.
 4. Нормализация MRZ-кандидатов: заглавные буквы; `«`, `く`, `‹`, пробелы и прочие символы вне `[A-Z0-9<]` → `<`; строки группируются по длине (44, 36, 30) и склеиваются, если детектор разбил одну строку на части.
 5. `mrz.parse(lines, { autocorrect: true })` → поля и признак валидности каждого.
