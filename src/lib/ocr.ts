@@ -10,7 +10,9 @@ const load = () =>
       textRecognitionModelName: "en_PP-OCRv5_mobile_rec",
       textRecognitionModelAsset: { url: `${models}en_PP-OCRv5_mobile_rec_onnx_infer.tar` },
       worker: true,
-      ortOptions: { backend: "wasm" },
+      // Self-hosted: without this the SDK falls back to fetching onnxruntime-web's wasm/mjs from
+      // cdn.jsdelivr.net, a third-party dependency that also leaks the user's IP.
+      ortOptions: { backend: "wasm", wasmPaths: new URL(`${import.meta.env.BASE_URL}ort/`, location.href).href },
     })
   })
 
