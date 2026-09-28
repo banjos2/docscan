@@ -20,6 +20,11 @@ npm run dev
 `scripts/fetch_assets.sh` идемпотентен: уже скачанные файлы он не трогает, можно запускать
 повторно.
 
+## Деплой
+
+Пошаговая инструкция для Railway: [docs/deploy-railway.md](docs/deploy-railway.md). Для любого
+другого Docker-хостинга подойдут те же `Dockerfile` и `Caddyfile`.
+
 ## Пустой бланк анкеты
 
 `public/anketa-template.pdf` получен из заполненного `ANKETA.pdf` скриптом
