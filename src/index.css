@@ -120,8 +120,11 @@
 }
 
 /* Unlayered: cascade layers (shadcn's `outline-none` utility included) always lose to unlayered CSS,
-   regardless of specificity, so this keeps the focus ring on every shadcn control. */
-:focus-visible {
+   regardless of specificity, so this keeps the focus ring on every shadcn control.
+   Text fields and select triggers are excluded (user decision): they match :focus-visible on every
+   mouse click, and the orange outline stacked on shadcn's own grey border/ring looked heavy — those
+   controls keep shadcn's neutral focus style instead. */
+:focus-visible:not(input, textarea, select, [data-slot="select-trigger"]) {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
