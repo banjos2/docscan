@@ -13,7 +13,10 @@ function addMonths(iso: string, months: number): string {
 export function validate(v: Values, today = new Date()): { errors: Errors; warnings: string[] } {
   const errors: Errors = {}
   for (const k of REQUIRED) if (!v[k].trim()) errors[k] = "Обязательное поле"
-  for (const k of TEXT_KEYS) if (!LATIN.test(v[k])) errors[k] = "Анкета заполняется латиницей"
+  for (const k of TEXT_KEYS) {
+    if (k === "sponsorWho" && v.payer !== "sponsor") continue
+    if (!LATIN.test(v[k])) errors[k] = "Анкета заполняется латиницей"
+  }
 
   const t = isoDate(today)
   const warnings: string[] = []

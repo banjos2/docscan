@@ -3,7 +3,7 @@ import type { Source, Sources, Values } from "./anketa"
 
 export class MrzNotFoundError extends Error {
   constructor() {
-    super("MRZ не найдена. Сфотографируйте страницу с фото целиком, без бликов на двух нижних строках.")
+    super("MRZ не найдена. Сфотографируйте страницу с фото целиком, без бликов на машиночитаемых строках внизу.")
   }
 }
 
@@ -56,11 +56,15 @@ const country = (code: string) => {
 }
 
 // YYMMDD → yyyy-mm-dd. Expiry dates are always 20xx; birth dates later than this year are 19xx.
+// A failed check digit falls back to the raw digits (see `text` in extract()), which can be an
+// impossible date (e.g. day 87): only return it once it round-trips through Date.
 function isoFromMrz(s: string, expiry: boolean, today: Date): string {
   if (!/^\d{6}$/.test(s)) return ""
   const yy = Number(s.slice(0, 2))
   const century = expiry || yy <= today.getFullYear() % 100 ? 2000 : 1900
-  return `${century + yy}-${s.slice(2, 4)}-${s.slice(4, 6)}`
+  const iso = `${century + yy}-${s.slice(2, 4)}-${s.slice(4, 6)}`
+  const d = new Date(iso + "T00:00:00Z")
+  return !isNaN(+d) && d.toISOString().startsWith(iso) ? iso : ""
 }
 
 export function extract(rows: string[], today = new Date()): { values: Partial<Values>; sources: Sources } {
@@ -81,6 +85,8 @@ export function extract(rows: string[], today = new Date()): { values: Partial<V
   const surname = text("lastName")
   const nationality = country(text("nationality"))
   const personal = fields.personalNumber !== undefined ? "personalNumber" : "optional2"
+  // Anything other than male/female (unspecified, or missing) needs a manual choice, not a guess.
+  const sex = fields.sex === "male" ? "M" : fields.sex === "female" ? "F" : ""
   const values: Partial<Values> = {
     surname,
     surnameAtBirth: surname,
@@ -89,7 +95,7 @@ export function extract(rows: string[], today = new Date()): { values: Partial<V
     countryOfBirth: nationality,
     nationality,
     nationalityAtBirth: nationality,
-    sex: fields.sex === "male" ? "M" : fields.sex === "female" ? "F" : fields.sex ? "X" : "",
+    sex,
     nationalId: text(personal),
     docType: fields.documentCode?.startsWith("P") ? (fields.documentCode === "PD" ? "diplomatic" : "ordinary") : "other",
     docNumber: r.documentNumber ?? text("documentNumber"),
@@ -100,7 +106,7 @@ export function extract(rows: string[], today = new Date()): { values: Partial<V
     surname: src("lastName"),
     firstName: src("firstName"),
     birthDate: src("birthDate"),
-    sex: src("sex"),
+    sex: sex ? src("sex") : "check",
     nationality: src("nationality"),
     docType: src("documentCode"),
     docNumber: src("documentNumber"),
@@ -113,11 +119,10 @@ export function extract(rows: string[], today = new Date()): { values: Partial<V
   }
   if (values.nationalId) sources.nationalId = src(personal)
 
+  // Always set (never left over from a previous scan); only flagged for review when actually found.
   const issueDate = findIssueDate(rows, values.birthDate ?? "", values.expiryDate ?? "")
-  if (issueDate) {
-    values.issueDate = issueDate
-    sources.issueDate = "check"
-  }
+  values.issueDate = issueDate
+  if (issueDate) sources.issueDate = "check"
   return { values, sources }
 }
 

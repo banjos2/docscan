@@ -25,8 +25,15 @@ test("extract maps a clean TD3 MRZ to anketa fields", () => {
     issuedBy: "GERMANY",
     nationalId: "",
   })
-  expect(values.issueDate).toBeUndefined()
+  expect(values.issueDate).toBe("")
   expect(sources).toMatchObject({ surname: "mrz", docNumber: "mrz", birthDate: "mrz", expiryDate: "mrz", surnameAtBirth: "check" })
+})
+
+test("extract blanks a birth date whose check digit fails and which is also impossible", () => {
+  // "640872" is not a real date (day 87); the original "640812" check digit no longer matches it.
+  const { values, sources } = extract(["REISEPASS PASSPORT", "MUSTERMANN", L1, L2.replace("6408125", "6408725")], TODAY)
+  expect(values.birthDate).toBe("")
+  expect(sources.birthDate).toBe("check")
 })
 
 test("extract repairs filler look-alikes and flags autocorrected fields", () => {
@@ -59,6 +66,11 @@ test("validate requires key fields and Latin-1 text", () => {
   // Covering: DEL (0x7F) and C1 control (0x85) must be rejected
   expect(validate({ ...emptyValues(TODAY), address1: `Berlin${String.fromCharCode(0x7f)}` }, TODAY).errors.address1).toBe("Анкета заполняется латиницей")
   expect(validate({ ...emptyValues(TODAY), address1: `Berlin${String.fromCharCode(0x85)}` }, TODAY).errors.address1).toBe("Анкета заполняется латиницей")
+})
+
+test("validate skips the sponsor field when the payer is not the sponsor", () => {
+  const { errors } = validate({ ...emptyValues(TODAY), payer: "self", sponsorWho: "Мать" }, TODAY)
+  expect(errors.sponsorWho).toBeUndefined()
 })
 
 test("validate warns about passport validity", () => {
