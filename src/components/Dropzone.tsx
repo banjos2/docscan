@@ -2,11 +2,11 @@ import { useRef, useState } from "react"
 import { CircleAlert, LoaderCircle, ScanLine } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
+import { isHeic } from "@/lib/heic"
 import { cn } from "@/lib/utils"
 
 const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp"]
-const UNSUPPORTED_FORMAT_MESSAGE =
-  "Поддерживаются JPG, PNG и WebP. Фото HEIC с iPhone сохраните как JPG или сделайте скриншот."
+const UNSUPPORTED_FORMAT_MESSAGE = "Поддерживаются JPG, PNG, WebP и HEIC. Сохраните фото в одном из этих форматов."
 
 type Props = {
   photo: string | null
@@ -23,7 +23,7 @@ export function Dropzone({ photo, busy, error, onFile }: Props) {
     if (busy) return
     const file = files?.[0]
     if (!file) return
-    if (!ACCEPTED_TYPES.includes(file.type)) {
+    if (!ACCEPTED_TYPES.includes(file.type) && !isHeic(file)) {
       setFormatError(UNSUPPORTED_FORMAT_MESSAGE)
       return
     }
@@ -53,7 +53,7 @@ export function Dropzone({ photo, busy, error, onFile }: Props) {
         <input
           ref={input}
           type="file"
-          accept="image/jpeg,image/png,image/webp"
+          accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif"
           className="sr-only"
           disabled={!!busy}
           onChange={(e) => {
@@ -67,7 +67,7 @@ export function Dropzone({ photo, busy, error, onFile }: Props) {
           <>
             <ScanLine className="size-10" strokeWidth={1.5} aria-hidden />
             <p className="font-medium">Перетащите фото паспорта или ID-карты</p>
-            <p className="text-sm">или нажмите, чтобы выбрать файл: JPG, PNG, WebP</p>
+            <p className="text-sm">или нажмите, чтобы выбрать файл: JPG, PNG, WebP, HEIC</p>
           </>
         )}
         {busy && (

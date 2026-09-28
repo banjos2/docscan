@@ -6,6 +6,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { emptyValues, type Sources, type Values } from "@/lib/anketa"
+import { heicToJpeg, isHeic } from "@/lib/heic"
 import { extract, MrzNotFoundError } from "@/lib/mrz"
 import { preloadOcr, recognize } from "@/lib/ocr"
 import { validate } from "@/lib/validate"
@@ -44,15 +45,27 @@ export function App() {
 
   async function scan(file: File) {
     if (busy) return
-    const url = URL.createObjectURL(file)
+    setOcrError(null)
+    let image: Blob = file
+    if (isHeic(file)) {
+      setBusy("Открываю HEIC…")
+      try {
+        image = await heicToJpeg(file)
+      } catch (e) {
+        console.error(e)
+        setOcrError("Не получилось открыть HEIC-файл. Сохраните фото как JPG и загрузите снова.")
+        setBusy(null)
+        return
+      }
+    }
+    const url = URL.createObjectURL(image)
     setPhoto((old) => {
       if (old) URL.revokeObjectURL(old)
       return url
     })
-    setOcrError(null)
     setBusy("Загружаю модель распознавания…")
     try {
-      const rows = await recognize(file, () => setBusy("Распознаю документ…"))
+      const rows = await recognize(image, () => setBusy("Распознаю документ…"))
       const found = extract(rows)
       setValues((v) => ({ ...v, ...found.values }))
       setSources(found.sources)
