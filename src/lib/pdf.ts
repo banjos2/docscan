@@ -22,11 +22,13 @@ export async function fillAnketa(template: ArrayBuffer | Uint8Array, v: Values):
   }
 
   for (const key of Object.keys(OPTIONS) as ChoiceKey[]) {
-    const pos = BOXES[key][v[key]]
+    // v[key] is a plain string at runtime (user input / MRZ text), not the option's literal key
+    // union, so it's looked up rather than indexed directly.
+    const pos = (BOXES[key] as Record<string, Pos>)[v[key]]
     if (pos) tick(pos)
   }
   if (v.payer === "sponsor" && v.sponsorWho.trim()) tick(SPONSOR_OTHER)
-  const means = MEANS_BOXES[v.payer as "self" | "sponsor"] ?? {}
+  const means = (MEANS_BOXES as Record<string, Record<string, Pos>>)[v.payer] ?? {}
   for (const m of v.means) if (means[m]) tick(means[m])
 
   return pdf.save()

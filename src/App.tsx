@@ -8,7 +8,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { emptyValues, type Sources, type Values } from "@/lib/anketa"
 import { extract, MrzNotFoundError } from "@/lib/mrz"
 import { preloadOcr, recognize } from "@/lib/ocr"
-import { fillAnketa } from "@/lib/pdf"
 import { validate } from "@/lib/validate"
 
 export function App() {
@@ -26,6 +25,17 @@ export function App() {
 
   useEffect(() => preloadOcr(), [])
 
+  // A drop outside the tile must not let the browser navigate away to show the image file.
+  useEffect(() => {
+    const prevent = (e: DragEvent) => e.preventDefault()
+    window.addEventListener("dragover", prevent)
+    window.addEventListener("drop", prevent)
+    return () => {
+      window.removeEventListener("dragover", prevent)
+      window.removeEventListener("drop", prevent)
+    }
+  }, [])
+
   const replacePdf = (url: string | null) =>
     setPdf((old) => {
       if (old) URL.revokeObjectURL(old)
@@ -34,9 +44,10 @@ export function App() {
 
   async function scan(file: File) {
     if (busy) return
+    const url = URL.createObjectURL(file)
     setPhoto((old) => {
       if (old) URL.revokeObjectURL(old)
-      return URL.createObjectURL(file)
+      return url
     })
     setOcrError(null)
     setBusy("Загружаю модель распознавания…")
@@ -72,6 +83,7 @@ export function App() {
     if (hasErrors) return
     setGenerating(true)
     try {
+      const { fillAnketa } = await import("@/lib/pdf")
       const res = await fetch(`${import.meta.env.BASE_URL}anketa-template.pdf`)
       if (!res.ok) throw new Error(`Не удалось загрузить шаблон анкеты: ${res.status}`)
       const bytes = await fillAnketa(await res.arrayBuffer(), values)
@@ -126,7 +138,7 @@ export function App() {
               <CardHeader className="flex flex-row items-center justify-between gap-4">
                 <CardTitle>Готовая анкета</CardTitle>
                 <Button asChild>
-                  <a href={pdf} download={`anketa-${values.surname || "schengen"}.pdf`}>
+                  <a href={pdf} download={`anketa-${(values.surname || "schengen").toUpperCase()}.pdf`}>
                     <Download />
                     Скачать PDF
                   </a>

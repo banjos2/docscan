@@ -4,6 +4,10 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
+const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp"]
+const UNSUPPORTED_FORMAT_MESSAGE =
+  "Поддерживаются JPG, PNG и WebP. Фото HEIC с iPhone сохраните как JPG или сделайте скриншот."
+
 type Props = {
   photo: string | null
   busy: string | null
@@ -14,10 +18,17 @@ type Props = {
 export function Dropzone({ photo, busy, error, onFile }: Props) {
   const input = useRef<HTMLInputElement>(null)
   const [over, setOver] = useState(false)
+  const [formatError, setFormatError] = useState<string | null>(null)
   const pick = (files: FileList | null) => {
     if (busy) return
     const file = files?.[0]
-    if (file?.type.startsWith("image/")) onFile(file)
+    if (!file) return
+    if (!ACCEPTED_TYPES.includes(file.type)) {
+      setFormatError(UNSUPPORTED_FORMAT_MESSAGE)
+      return
+    }
+    setFormatError(null)
+    onFile(file)
   }
 
   return (
@@ -42,7 +53,7 @@ export function Dropzone({ photo, busy, error, onFile }: Props) {
         <input
           ref={input}
           type="file"
-          accept="image/*"
+          accept="image/jpeg,image/png,image/webp"
           className="sr-only"
           disabled={!!busy}
           onChange={(e) => {
@@ -60,16 +71,26 @@ export function Dropzone({ photo, busy, error, onFile }: Props) {
           </>
         )}
         {busy && (
-          <div role="status" className="absolute inset-0 flex items-center justify-center gap-2 bg-background/70 text-sm font-medium backdrop-blur-sm">
+          <div className="absolute inset-0 flex items-center justify-center gap-2 bg-background/70 text-sm font-medium backdrop-blur-sm">
             <LoaderCircle className="size-4 animate-spin" aria-hidden />
             {busy}
           </div>
         )}
       </label>
+      <div role="status" aria-live="polite" className="sr-only">
+        {busy ?? ""}
+      </div>
       {photo && (
         <Button variant="outline" className="self-start" onClick={() => input.current?.click()} disabled={!!busy}>
           Заменить фото
         </Button>
+      )}
+      {formatError && (
+        <Alert variant="destructive">
+          <CircleAlert />
+          <AlertTitle>Не удалось загрузить файл</AlertTitle>
+          <AlertDescription>{formatError}</AlertDescription>
+        </Alert>
       )}
       {error && (
         <Alert variant="destructive">

@@ -1,4 +1,4 @@
-import type { ChoiceKey, TextKey } from "./anketa"
+import type { ChoiceKey, MEANS, OPTIONS, TextKey } from "./anketa"
 
 export type Pos = { page: number; x: number; y: number }
 export type TextPos = Pos & { size: number; maxWidth: number }
@@ -38,7 +38,7 @@ export const TEXT: Record<TextKey, TextPos> = {
   signDate: at(3, 70.9, 96.3, 11, 200),
 }
 
-export const BOXES: Record<ChoiceKey, Record<string, Pos>> = {
+export const BOXES: { [K in ChoiceKey]: Record<keyof (typeof OPTIONS)[K], Pos> } = {
   sex: { M: box(0, 55.6, 391.2), F: box(0, 121, 391.2), X: box(0, 182.6, 391.2) },
   maritalStatus: {
     single: box(0, 238.3, 391.2),
@@ -78,7 +78,7 @@ export const BOXES: Record<ChoiceKey, Record<string, Pos>> = {
 // Item 33, sponsor column: "otro (especifíquese)" — ticked when the sponsor is named.
 export const SPONSOR_OTHER = box(2, 283.7, 550.9)
 
-export const MEANS_BOXES: Record<"self" | "sponsor", Record<string, Pos>> = {
+export const MEANS_BOXES: { [K in keyof typeof MEANS]: Record<keyof (typeof MEANS)[K], Pos> } = {
   self: {
     cash: box(2, 55.6, 541.8),
     cheques: box(2, 55.6, 532.6),

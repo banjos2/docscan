@@ -57,7 +57,7 @@ const SECTIONS: { title: string; description: string; fromDoc?: boolean; fields:
       { key: "entries", label: "27. Количество въездов", type: "select" },
       { key: "arrivalDate", label: "28. Дата въезда", type: "date" },
       { key: "departureDate", label: "28. Дата выезда", type: "date" },
-      { key: "fingerprints", label: "29. Сдавали отпечатки для шенгена", type: "select" },
+      { key: "fingerprints", label: "29. Сдавали отпечатки для шенгенской визы", type: "select" },
       { key: "host", label: "31. Приглашающий или отель", wide: true },
       { key: "hostAddress1", label: "31. Адрес", wide: true },
       { key: "hostAddress2", label: "31. Адрес, продолжение", wide: true },
@@ -154,7 +154,7 @@ function FieldRow({
   } else if (f.type === "means") {
     const options: Record<string, string> = MEANS[values.payer as keyof typeof MEANS] ?? {}
     control = (
-      <div className="grid gap-2 sm:grid-cols-2">
+      <div role="group" aria-labelledby={`${id}-label`} className="grid gap-2 sm:grid-cols-2">
         {Object.entries(options).map(([k, label]) => (
           <label key={k} className="flex items-center gap-2 text-sm">
             <Checkbox
@@ -181,7 +181,13 @@ function FieldRow({
   return (
     <div className={cn("flex flex-col gap-2", f.wide && "sm:col-span-2")}>
       <div className="flex min-h-5 items-center justify-between gap-2">
-        {f.type === "means" ? <span className="text-sm font-medium">{f.label}</span> : <Label htmlFor={id}>{f.label}</Label>}
+        {f.type === "means" ? (
+          <span id={`${id}-label`} className="text-sm font-medium">
+            {f.label}
+          </span>
+        ) : (
+          <Label htmlFor={id}>{f.label}</Label>
+        )}
         {badge}
       </div>
       {control}
