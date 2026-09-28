@@ -1,21 +1,35 @@
-# React + TypeScript + Vite + shadcn/ui
+# DocScan
 
-This is a template for a new Vite project with React, TypeScript, and shadcn/ui.
+Фото паспорта или ID-карты → распознавание MRZ прямо в браузере → анкета для шенгенской визы,
+проверенная и заполненная в PDF. Backend отсутствует: фото, OCR-модели и готовый PDF никогда не
+покидают устройство.
 
-## Adding components
-
-To add components to your app, run the following command:
+## Запуск
 
 ```bash
-npx shadcn@latest add button
+npm install
+sh scripts/fetch_assets.sh   # модели OCR и WASM-рантайм — большие бинарники, не в git
+npm run dev
 ```
 
-This will place the ui components in the `src/components` directory.
+Другие команды: `npm test` (юнит-тесты), `npm run build` (проверка типов + сборка), `npm run lint`.
 
-## Using components
+`scripts/fetch_assets.sh` идемпотентен: уже скачанные файлы он не трогает, можно запускать
+повторно.
 
-To use the components in your app, import them as follows:
+## Пустой бланк анкеты
 
-```tsx
-import { Button } from "@/components/ui/button"
+`public/anketa-template.pdf` получен из заполненного `ANKETA.pdf` скриптом
+`scripts/make_template.py` (нужен PyMuPDF: `pip install pymupdf`), который вырезает из PDF
+наложенный слой с ответами, оставляя чистую форму:
+
+```bash
+python scripts/make_template.py ~/Downloads/ANKETA.pdf public/anketa-template.pdf
 ```
+
+Файл с реальными персональными данными (`~/Downloads/ANKETA.pdf` или любой заполненный экземпляр)
+никогда не коммитится и не должен использоваться нигде, кроме этой команды.
+
+## Шрифт
+
+VK Sans Display — корпоративный шрифт VK. Перед публичным деплоем проверьте условия его лицензии.

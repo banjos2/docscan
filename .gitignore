@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 
+# Fetched by scripts/fetch_assets.sh, not committed (large binaries).
+public/models/
+public/ort/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
