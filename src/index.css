@@ -9,7 +9,7 @@
 @font-face { font-family: "VK Sans Display"; src: url("./assets/fonts/VKSansDisplay-DemiBold.ttf") format("truetype"); font-weight: 600; font-display: swap; }
 @font-face { font-family: "VK Sans Display"; src: url("./assets/fonts/VKSansDisplay-Bold.ttf") format("truetype"); font-weight: 700; font-display: swap; }
 
-@custom-variant dark (&:is(.dark *));
+@custom-variant dark (@media (prefers-color-scheme: dark));
 
 /* Graphite: семантика shadcn/ui + акценты Great UI (flame, tile). */
 @theme inline {
@@ -79,30 +79,32 @@
   --on-flame: #0a0a0a;
 }
 
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --destructive-foreground: oklch(0.145 0 0);
-  --border: oklch(1 0 0 / 0.1);
-  --input: oklch(1 0 0 / 0.15);
-  --ring: oklch(0.556 0 0);
-  --focus-ring: #f6821f;
-  --tile: #171717;
-  --tile-hover: #262626;
-  --flame-ink: #f6821f;
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: oklch(0.145 0 0);
+    --foreground: oklch(0.985 0 0);
+    --card: oklch(0.205 0 0);
+    --card-foreground: oklch(0.985 0 0);
+    --popover: oklch(0.205 0 0);
+    --popover-foreground: oklch(0.985 0 0);
+    --primary: oklch(0.922 0 0);
+    --primary-foreground: oklch(0.205 0 0);
+    --secondary: oklch(0.269 0 0);
+    --secondary-foreground: oklch(0.985 0 0);
+    --muted: oklch(0.269 0 0);
+    --muted-foreground: oklch(0.708 0 0);
+    --accent: oklch(0.269 0 0);
+    --accent-foreground: oklch(0.985 0 0);
+    --destructive: oklch(0.704 0.191 22.216);
+    --destructive-foreground: oklch(0.145 0 0);
+    --border: oklch(1 0 0 / 0.1);
+    --input: oklch(1 0 0 / 0.15);
+    --ring: oklch(0.556 0 0);
+    --focus-ring: #f6821f;
+    --tile: #171717;
+    --tile-hover: #262626;
+    --flame-ink: #f6821f;
+  }
 }
 
 @layer base {
@@ -115,8 +117,11 @@
   html {
     @apply font-sans;
   }
-  :focus-visible {
-    outline: 2px solid var(--focus-ring);
-    outline-offset: 2px;
-  }
+}
+
+/* Unlayered: cascade layers (shadcn's `outline-none` utility included) always lose to unlayered CSS,
+   regardless of specificity, so this keeps the focus ring on every shadcn control. */
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }
