@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { emptyValues, type Sources, type Values } from "@/lib/anketa"
 import { heicToJpeg, isHeic } from "@/lib/heic"
 import { extract, MrzNotFoundError } from "@/lib/mrz"
-import { preloadOcr, recognize } from "@/lib/ocr"
+import { preloadOcr, recognize, turnOver } from "@/lib/ocr"
 import { validate } from "@/lib/validate"
 
 export function App() {
@@ -65,8 +65,14 @@ export function App() {
     })
     setBusy("Загружаю модель распознавания…")
     try {
-      const rows = await recognize(image, () => setBusy("Распознаю документ…"))
-      const found = extract(rows)
+      const found = await recognize(image, () => setBusy("Распознаю документ…"))
+        .then(extract)
+        .catch(async (e) => {
+          if (!(e instanceof MrzNotFoundError)) throw e
+          // Upside down, or turned 270°: one more pass on the photo turned over (90° is read as is).
+          setBusy("Переворачиваю фото и распознаю ещё раз…")
+          return extract(await recognize(await turnOver(image)))
+        })
       setValues((v) => ({ ...v, ...found.values }))
       setSources(found.sources)
       replacePdf(null)

@@ -60,6 +60,21 @@ test("extract throws MrzNotFoundError without an MRZ", () => {
   expect(() => extract(["REISEPASS", "MUSTERMANN ERIKA", "12.08.1964"], TODAY)).toThrow(MrzNotFoundError)
 })
 
+// Real OCR rows from a Belarusian passport sample: the thin MRZ font lost most of line 1.
+const BY_L2 = "KB12345671BLR8802026F08020191234567A123PB134"
+const BY_ROWS = ["MATA BBULA I/DATE OF ISSUE ALKI BUA AIAPTAUTHORITY", "02 02 1988 1234567A123PB1", "02 02 1998 MINISTRY OF", "01 02 2008 INTERNAL AFFAIRS", "P<BLRJOHNSON<<E <<<<<<<<<", BY_L2]
+
+test("extract never pairs a visual-zone line with MRZ line 2", () => {
+  // Line 2 has every check digit right, but nothing checks line 1: a text line must not pass for it.
+  expect(() => extract(BY_ROWS, TODAY)).toThrow(MrzNotFoundError)
+  expect(() => extract(["PLACE OF BIRTH/LIEU DE NAISSANCE MOSCOW USSR", BY_L2], TODAY)).toThrow(MrzNotFoundError)
+})
+
+test("extract reads the MRZ re-read from its band ahead of the page rows", () => {
+  const { values } = extract(["P<BLRJOHNSON<<EMILY<<<<<<<<<<<<<<<<<<<<<<<<<", BY_L2, ...BY_ROWS], TODAY)
+  expect(values).toMatchObject({ surname: "JOHNSON", firstName: "EMILY", docNumber: "KB1234567", birthDate: "1988-02-02", issueDate: "1998-02-02" })
+})
+
 test("findIssueDate returns the only date that is neither birth nor expiry", () => {
   expect(findIssueDate(["12.08.1964", "01 MÄR/MAR 2017", "28.02.2027"], "1964-08-12", "2027-02-28")).toBe("2017-03-01")
   expect(findIssueDate(["15 JUN 1990", "05 APR/APR 21", "05.04.2031"], "1990-06-15", "2031-04-05")).toBe("2021-04-05")

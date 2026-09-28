@@ -40,6 +40,10 @@ function findMrz(rows: string[]): Parsed {
       if (window.some((l) => Math.abs(l.length - n) > 4)) continue
       try {
         const r = parse(window.map((l) => fitLength(l, n)), { autocorrect: true })
+        // No check digit covers the names, so a line of printed text could pass for them next to a real
+        // line 2: the name line needs its "<<" separator (before fitLength invents one) and a valid document code.
+        const names = window[count === 3 ? 2 : 0]
+        if (!names.includes("<<") || !r.details.find((d) => d.field === "documentCode")?.valid) continue
         if (!best || score(r) > score(best)) best = r
       } catch {
         // not this format
