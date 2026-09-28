@@ -1,5 +1,5 @@
 import { expect, test } from "vitest"
-import { emptyValues } from "./anketa"
+import { dmyToIso, emptyValues, maskDmy } from "./anketa"
 import { extract, findIssueDate, MrzNotFoundError } from "./mrz"
 import { validate } from "./validate"
 
@@ -79,6 +79,11 @@ test("findIssueDate returns the only date that is neither birth nor expiry", () 
   expect(findIssueDate(["12.08.1964", "01 MÄR/MAR 2017", "28.02.2027"], "1964-08-12", "2027-02-28")).toBe("2017-03-01")
   expect(findIssueDate(["15 JUN 1990", "05 APR/APR 21", "05.04.2031"], "1990-06-15", "2031-04-05")).toBe("2021-04-05")
   expect(findIssueDate(["01.01.2010", "01.01.2011"], "1990-01-01", "2030-01-01")).toBe("")
+})
+
+test("maskDmy adds the dots a numeric keypad lacks and dmyToIso accepts only real dates", () => {
+  expect(["1", "19", "190", "1907", "19072016", "19.07.2016", "19/07/20161"].map(maskDmy)).toEqual(["1", "19", "19.0", "19.07", "19.07.2016", "19.07.2016", "19.07.2016"])
+  expect(["19.07.2016", "29.02.2024", "31.02.2020", "19.07.201", ""].map(dmyToIso)).toEqual(["2016-07-19", "2024-02-29", "", "", ""])
 })
 
 test("validate requires key fields and Latin-1 text", () => {

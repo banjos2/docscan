@@ -70,14 +70,28 @@ export type TextKey = (typeof TEXT_KEYS)[number]
 export type Values = Record<TextKey | ChoiceKey, string> & { means: string[] }
 export type Sources = Partial<Record<keyof Values, Source>>
 
-// Stored as ISO yyyy-mm-dd (what <input type="date"> uses), printed as dd-mm-yyyy.
+// Stored as ISO yyyy-mm-dd, typed as dd.mm.yyyy, printed as dd-mm-yyyy.
 export const DATE_KEYS: readonly TextKey[] = ["birthDate", "issueDate", "expiryDate", "arrivalDate", "departureDate", "signDate"]
 export const REQUIRED: readonly TextKey[] = ["surname", "firstName", "birthDate", "nationality", "docNumber", "expiryDate"]
 
 export const isoDate = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
 
-export const toDmy = (iso: string) => iso.split("-").reverse().join("-")
+export const toDmy = (iso: string, sep = "-") => iso.split("-").reverse().join(sep)
+
+// The date itself if it exists on the calendar, "" for one like 2020-02-31.
+export function realIso(iso: string): string {
+  const d = new Date(iso + "T00:00:00Z")
+  return !isNaN(+d) && d.toISOString().startsWith(iso) ? iso : ""
+}
+
+// Dots appear as the digits arrive: a phone's numeric keypad has none.
+export function maskDmy(text: string): string {
+  const d = text.replace(/\D/g, "").slice(0, 8)
+  return [d.slice(0, 2), d.slice(2, 4), d.slice(4)].filter(Boolean).join(".")
+}
+
+export const dmyToIso = (text: string) => (/^\d{2}\.\d{2}\.\d{4}$/.test(text) ? realIso(toDmy(text.replaceAll(".", "-"))) : "")
 
 export function emptyValues(today = new Date()): Values {
   const blank = Object.fromEntries([...TEXT_KEYS, ...Object.keys(OPTIONS)].map((k) => [k, ""]))

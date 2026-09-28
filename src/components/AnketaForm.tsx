@@ -1,4 +1,5 @@
 import type { ReactNode } from "react"
+import { DateField } from "@/components/DateField"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -165,6 +166,16 @@ function FieldRow({
           </label>
         ))}
       </div>
+    )
+  } else if (f.type === "date") {
+    control = (
+      <DateField
+        id={id}
+        value={values[f.key] as string}
+        aria-invalid={!!error}
+        aria-describedby={errorId}
+        onChange={(iso) => onChange(f.key, iso)}
+      />
     )
   } else {
     control = (

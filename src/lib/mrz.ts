@@ -1,5 +1,5 @@
 import { parse, states } from "mrz"
-import type { Source, Sources, Values } from "./anketa"
+import { realIso, type Source, type Sources, type Values } from "./anketa"
 
 export class MrzNotFoundError extends Error {
   constructor() {
@@ -66,9 +66,7 @@ function isoFromMrz(s: string, expiry: boolean, today: Date): string {
   if (!/^\d{6}$/.test(s)) return ""
   const yy = Number(s.slice(0, 2))
   const century = expiry || yy <= today.getFullYear() % 100 ? 2000 : 1900
-  const iso = `${century + yy}-${s.slice(2, 4)}-${s.slice(4, 6)}`
-  const d = new Date(iso + "T00:00:00Z")
-  return !isNaN(+d) && d.toISOString().startsWith(iso) ? iso : ""
+  return realIso(`${century + yy}-${s.slice(2, 4)}-${s.slice(4, 6)}`)
 }
 
 export function extract(rows: string[], today = new Date()): { values: Partial<Values>; sources: Sources } {
