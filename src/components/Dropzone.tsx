@@ -15,6 +15,7 @@ export function Dropzone({ photo, busy, error, onFile }: Props) {
   const input = useRef<HTMLInputElement>(null)
   const [over, setOver] = useState(false)
   const pick = (files: FileList | null) => {
+    if (busy) return
     const file = files?.[0]
     if (file?.type.startsWith("image/")) onFile(file)
   }
@@ -43,6 +44,7 @@ export function Dropzone({ photo, busy, error, onFile }: Props) {
           type="file"
           accept="image/*"
           className="sr-only"
+          disabled={!!busy}
           onChange={(e) => {
             pick(e.target.files)
             e.target.value = ""
