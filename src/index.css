@@ -1,0 +1,130 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/geist-mono";
+
+/* VK Sans Display: единственный шрифт интерфейса и заголовков (400–700, латиница и кириллица). */
+@font-face { font-family: "VK Sans Display"; src: url("./assets/fonts/VKSansDisplay-Regular.ttf") format("truetype"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "VK Sans Display"; src: url("./assets/fonts/VKSansDisplay-Medium.ttf") format("truetype"); font-weight: 500; font-display: swap; }
+@font-face { font-family: "VK Sans Display"; src: url("./assets/fonts/VKSansDisplay-DemiBold.ttf") format("truetype"); font-weight: 600; font-display: swap; }
+@font-face { font-family: "VK Sans Display"; src: url("./assets/fonts/VKSansDisplay-Bold.ttf") format("truetype"); font-weight: 700; font-display: swap; }
+
+@custom-variant dark (@media (prefers-color-scheme: dark));
+
+/* Graphite: семантика shadcn/ui + акценты Great UI (flame, tile). */
+@theme inline {
+  --font-sans: "VK Sans Display", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-display: "VK Sans Display", ui-sans-serif, system-ui, sans-serif;
+  --font-heading: var(--font-sans);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-flame: var(--flame);
+  --color-flame-ink: var(--flame-ink);
+  --color-on-flame: var(--on-flame);
+  --color-tile: var(--tile);
+  --color-tile-hover: var(--tile-hover);
+  --color-focus-ring: var(--focus-ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 2px);
+  --radius-2xl: 1rem;
+  --radius-3xl: 1.5rem;
+}
+
+:root {
+  --radius: 0.625rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.985 0 0);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --focus-ring: #b45309;
+  --tile: #f5f5f5;
+  --tile-hover: rgba(229, 229, 229, 0.7);
+  --flame: #f6821f;
+  --flame-ink: #b45309;
+  --on-flame: #0a0a0a;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: oklch(0.145 0 0);
+    --foreground: oklch(0.985 0 0);
+    --card: oklch(0.205 0 0);
+    --card-foreground: oklch(0.985 0 0);
+    --popover: oklch(0.205 0 0);
+    --popover-foreground: oklch(0.985 0 0);
+    --primary: oklch(0.922 0 0);
+    --primary-foreground: oklch(0.205 0 0);
+    --secondary: oklch(0.269 0 0);
+    --secondary-foreground: oklch(0.985 0 0);
+    --muted: oklch(0.269 0 0);
+    --muted-foreground: oklch(0.708 0 0);
+    --accent: oklch(0.269 0 0);
+    --accent-foreground: oklch(0.985 0 0);
+    --destructive: oklch(0.704 0.191 22.216);
+    --destructive-foreground: oklch(0.145 0 0);
+    --border: oklch(1 0 0 / 0.1);
+    --input: oklch(1 0 0 / 0.15);
+    --ring: oklch(0.556 0 0);
+    --focus-ring: #f6821f;
+    --tile: #171717;
+    --tile-hover: #262626;
+    --flame-ink: #f6821f;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+
+/* Unlayered: cascade layers (shadcn's `outline-none` utility included) always lose to unlayered CSS,
+   regardless of specificity, so this keeps the focus ring on every shadcn control.
+   Text fields and select triggers are excluded (user decision): they match :focus-visible on every
+   mouse click, and the orange outline stacked on shadcn's own grey border/ring looked heavy — those
+   controls keep shadcn's neutral focus style instead. */
+:focus-visible:not(input, textarea, select, [data-slot="select-trigger"]) {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}

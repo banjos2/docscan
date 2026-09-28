@@ -1,0 +1,9 @@
+# Railway terminates HTTPS itself and passes the port in $PORT.
+:{$PORT:8080} {
+	root * /srv
+	encode zstd gzip
+	file_server
+	header /assets/* Cache-Control "public, max-age=31536000, immutable"
+	header /models/* Cache-Control "public, max-age=604800"
+	header /ort/* Cache-Control "public, max-age=604800"
+}
