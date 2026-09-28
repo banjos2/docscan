@@ -43,6 +43,13 @@ test("extract repairs filler look-alikes and flags autocorrected fields", () => 
   expect(sources.birthDate).toBe("check")
 })
 
+test("extract leaves sex blank for manual choice when the MRZ marks it unspecified", () => {
+  // "<" in the sex position (instead of M/F) parses as mrz's "nonspecified", not male or female.
+  const { values, sources } = extract(["REISEPASS PASSPORT", "MUSTERMANN", L1, L2.replace("F", "<")], TODAY)
+  expect(values.sex).toBe("")
+  expect(sources.sex).toBe("check")
+})
+
 test("extract picks up the issue date from the visual zone", () => {
   const { values, sources } = extract(["12.08.1964 BERLIN", "01.03.2017 28.02.2027", L1, L2], TODAY)
   expect(values.issueDate).toBe("2017-03-01")
