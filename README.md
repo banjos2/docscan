@@ -25,6 +25,10 @@ npm run dev
 Пошаговая инструкция для Railway: [docs/deploy-railway.md](docs/deploy-railway.md). Для любого
 другого Docker-хостинга подойдут те же `Dockerfile` и `Caddyfile`.
 
+Задеплоенный сайт закрыт страницей входа (`public/login.html`): Caddy пускает дальше только с cookie, ключ которой есть
+в переменной `AUTH_KEYS`. Ключ для email и пароля печатает `sh scripts/auth-key.sh`; без `AUTH_KEYS` контейнер не
+запустится. `npm run dev` вход не проверяет.
+
 ## Пустой бланк анкеты
 
 `public/anketa-template.pdf` получен из заполненного `ANKETA.pdf` скриптом
