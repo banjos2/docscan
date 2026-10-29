@@ -12,6 +12,10 @@
 	}
 	redir @guest /login.html
 
+	# Pages must come back here on every visit: a cached index.html would open the app without the cookie check.
+	@page path / /index.html /login.html
+	header @page Cache-Control "no-cache"
+
 	file_server
 	header /assets/* Cache-Control "public, max-age=31536000, immutable"
 	header /models/* Cache-Control "public, max-age=604800"
