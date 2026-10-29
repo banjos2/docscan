@@ -2,6 +2,16 @@
 :{$PORT:8080} {
 	root * /srv
 	encode zstd gzip
+
+	# Login gate: /login.html sets the cookie docscan_key to the SHA-256 that scripts/auth-key.sh prints for an
+	# allowed email and password; AUTH_KEYS holds those keys joined by "|" (the Dockerfile refuses to start without it).
+	# ponytail: one fixed key per person and no rate limit; a strong password covers it, real sessions need a backend.
+	@guest {
+		not path /login.html
+		not header_regexp Cookie "(^|;\s*)docscan_key=({$AUTH_KEYS})(;|$)"
+	}
+	redir @guest /login.html
+
 	file_server
 	header /assets/* Cache-Control "public, max-age=31536000, immutable"
 	header /models/* Cache-Control "public, max-age=604800"
