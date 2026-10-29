@@ -5,22 +5,16 @@ import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
 import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { dmyToIso, isoDate, maskDmy, toDmy } from "@/lib/anketa"
+import { isoDate, maskDmy, parseDmy, realIso, showDmy } from "@/lib/anketa"
 
-type Props = Omit<ComponentProps<"input">, "value" | "onChange"> & { value: string; onChange: (iso: string) => void }
+type Props = Omit<ComponentProps<"input">, "value" | "onChange"> & { value: string; onChange: (value: string) => void }
 
 // The native date input shows the browser's format (mm/dd/yyyy in an English Chrome) and a white picker, neither of
-// which a page can change: typed dd.mm.yyyy plus a calendar in the app's own style instead. The value stays ISO.
+// which a page can change: typed dd.mm.yyyy plus a calendar in the app's own style instead. The value is ISO once the
+// typed date is real, the typed text until then.
 export function DateField({ value, onChange, ...props }: Props) {
-  const [draft, setDraft] = useState<string | null>(null)
-  const [prev, setPrev] = useState(value)
   const [open, setOpen] = useState(false)
-  // A scan or a calendar pick replaces a half-typed date.
-  if (value !== prev) {
-    setPrev(value)
-    if (value) setDraft(null)
-  }
-  const selected = value ? new Date(`${value}T00:00:00`) : undefined
+  const selected = realIso(value) ? new Date(`${value}T00:00:00`) : undefined
 
   return (
     <div className="relative">
@@ -30,14 +24,12 @@ export function DateField({ value, onChange, ...props }: Props) {
         inputMode="numeric"
         autoComplete="off"
         placeholder="ДД.ММ.ГГГГ"
-        value={draft ?? toDmy(value, ".")}
+        value={showDmy(value)}
         // A full-length date that doesn't exist (31.02) shows red at once instead of waiting for submit.
-        aria-invalid={props["aria-invalid"] || draft?.length === 10}
+        aria-invalid={props["aria-invalid"] || (value.length === 10 && !selected)}
         onChange={(e) => {
-          const text = maskDmy(e.target.value)
-          const iso = dmyToIso(text)
-          setDraft(iso ? null : text)
-          if (iso !== value) onChange(iso)
+          const next = parseDmy(maskDmy(e.target.value))
+          if (next !== value) onChange(next)
         }}
       />
       <Popover open={open} onOpenChange={setOpen}>

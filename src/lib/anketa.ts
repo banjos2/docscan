@@ -70,7 +70,7 @@ export type TextKey = (typeof TEXT_KEYS)[number]
 export type Values = Record<TextKey | ChoiceKey, string> & { means: string[] }
 export type Sources = Partial<Record<keyof Values, Source>>
 
-// Stored as ISO yyyy-mm-dd, typed as dd.mm.yyyy, printed as dd-mm-yyyy.
+// Stored as ISO yyyy-mm-dd (or the unfinished text, see parseDmy), typed as dd.mm.yyyy, printed as dd-mm-yyyy.
 export const DATE_KEYS: readonly TextKey[] = ["birthDate", "issueDate", "expiryDate", "arrivalDate", "departureDate", "signDate"]
 export const REQUIRED: readonly TextKey[] = ["surname", "firstName", "birthDate", "nationality", "docNumber", "expiryDate"]
 
@@ -91,7 +91,12 @@ export function maskDmy(text: string): string {
   return [d.slice(0, 2), d.slice(2, 4), d.slice(4)].filter(Boolean).join(".")
 }
 
-export const dmyToIso = (text: string) => (/^\d{2}\.\d{2}\.\d{4}$/.test(text) ? realIso(toDmy(text.replaceAll(".", "-"))) : "")
+// What a date field stores: ISO once the typed dd.mm.yyyy is a real date, the text as typed until then,
+// so validate() can flag it instead of the PDF going out with a blank.
+export const parseDmy = (text: string) =>
+  (/^\d{2}\.\d{2}\.\d{4}$/.test(text) && realIso(toDmy(text.replaceAll(".", "-")))) || text
+
+export const showDmy = (value: string) => (realIso(value) ? toDmy(value, ".") : value)
 
 export function emptyValues(today = new Date()): Values {
   const blank = Object.fromEntries([...TEXT_KEYS, ...Object.keys(OPTIONS)].map((k) => [k, ""]))

@@ -1,4 +1,4 @@
-import { isoDate, REQUIRED, TEXT_KEYS, type Values } from "./anketa"
+import { DATE_KEYS, isoDate, realIso, REQUIRED, TEXT_KEYS, type Values } from "./anketa"
 
 export type Errors = Partial<Record<keyof Values, string>>
 
@@ -18,13 +18,16 @@ export function validate(v: Values, today = new Date()): { errors: Errors; warni
     if (!LATIN.test(v[k])) errors[k] = "Анкета заполняется латиницей"
   }
 
+  // A date field holds the typed text until it is a real date (see parseDmy): that text must not reach the PDF.
+  for (const k of DATE_KEYS) if (v[k] && !realIso(v[k])) errors[k] = "Проверьте дату: ДД.ММ.ГГГГ"
+
   const t = isoDate(today)
+  const [expiry, departure, issue, birth] = (["expiryDate", "departureDate", "issueDate", "birthDate"] as const).map((k) => realIso(v[k]))
   const warnings: string[] = []
-  if (v.expiryDate && v.expiryDate < t) warnings.push("Срок действия паспорта истёк.")
-  if (v.expiryDate && v.departureDate && v.expiryDate < addMonths(v.departureDate, 3))
+  if (expiry && expiry < t) warnings.push("Срок действия паспорта истёк.")
+  if (expiry && departure && expiry < addMonths(departure, 3))
     warnings.push("Паспорт должен действовать ещё минимум 3 месяца после выезда из Шенгена (п. 28).")
-  if (v.issueDate && v.issueDate < addMonths(t, -120))
-    warnings.push("Паспорт выдан больше 10 лет назад: для шенгенской визы он не подойдёт.")
-  if (v.birthDate && v.birthDate > t) warnings.push("Дата рождения в будущем, проверьте п. 4.")
+  if (issue && issue < addMonths(t, -120)) warnings.push("Паспорт выдан больше 10 лет назад: для шенгенской визы он не подойдёт.")
+  if (birth && birth > t) warnings.push("Дата рождения в будущем, проверьте п. 4.")
   return { errors, warnings }
 }

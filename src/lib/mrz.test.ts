@@ -1,5 +1,5 @@
 import { expect, test } from "vitest"
-import { dmyToIso, emptyValues, maskDmy } from "./anketa"
+import { emptyValues, maskDmy, parseDmy, showDmy } from "./anketa"
 import { extract, findIssueDate, MrzNotFoundError } from "./mrz"
 import { validate } from "./validate"
 
@@ -86,9 +86,12 @@ test("findIssueDate ignores a misread date that isn't on the calendar", () => {
   expect(findIssueDate(["31 FEB 2019", "15.03.2019"], "1964-08-12", "2027-02-28")).toBe("2019-03-15")
 })
 
-test("maskDmy adds the dots a numeric keypad lacks and dmyToIso accepts only real dates", () => {
+test("maskDmy adds the dots a numeric keypad lacks; parseDmy stores only real dates as ISO, the rest as typed", () => {
   expect(["1", "19", "190", "1907", "19072016", "19.07.2016", "19/07/20161"].map(maskDmy)).toEqual(["1", "19", "19.0", "19.07", "19.07.2016", "19.07.2016", "19.07.2016"])
-  expect(["19.07.2016", "29.02.2024", "31.02.2020", "19.07.201", ""].map(dmyToIso)).toEqual(["2016-07-19", "2024-02-29", "", "", ""])
+  const typed = ["19.07.2016", "29.02.2024", "31.02.2020", "19.07.20", ""]
+  expect(typed.map(parseDmy)).toEqual(["2016-07-19", "2024-02-29", "31.02.2020", "19.07.20", ""])
+  // The field shows back exactly what was typed.
+  expect(typed.map(parseDmy).map(showDmy)).toEqual(typed)
 })
 
 test("validate requires key fields and Latin-1 text", () => {
@@ -110,4 +113,14 @@ test("validate warns about passport validity", () => {
   expect(validate(v, TODAY).warnings).toHaveLength(3)
   expect(validate({ ...v, expiryDate: "2026-01-01" }, TODAY).warnings).toHaveLength(4)
   expect(validate({ ...v, expiryDate: "2030-01-01", issueDate: "2020-01-01", birthDate: "1990-01-01" }, TODAY).warnings).toHaveLength(0)
+})
+
+test("validate flags a date left unfinished or impossible instead of letting the PDF go out without it", () => {
+  const v = { ...emptyValues(TODAY), expiryDate: "31.02.2020", departureDate: "12.03.20", issueDate: "2015-01-01" }
+  const { errors, warnings } = validate(v, TODAY)
+  expect(errors.expiryDate).toBe("Проверьте дату: ДД.ММ.ГГГГ")
+  expect(errors.departureDate).toBe("Проверьте дату: ДД.ММ.ГГГГ")
+  expect(errors.issueDate).toBeUndefined()
+  // Only real dates are compared: the issue date alone is old enough to warn about.
+  expect(warnings).toEqual(["Паспорт выдан больше 10 лет назад: для шенгенской визы он не подойдёт."])
 })
