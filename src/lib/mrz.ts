@@ -142,6 +142,7 @@ export function findIssueDate(rows: string[], birth: string, expiry: string): st
     const m = MONTHS.indexOf(mon) + 1
     if (m) found.add(`${y.length === 2 ? `20${y}` : y}-${String(m).padStart(2, "0")}-${d.padStart(2, "0")}`)
   }
-  const rest = [...found].filter((d) => d > birth && (!expiry || d < expiry))
+  // realIso drops an OCR misread like 31.02, which the day/month ranges above let through.
+  const rest = [...found].filter((d) => realIso(d) && d > birth && (!expiry || d < expiry))
   return rest.length === 1 ? rest[0] : ""
 }

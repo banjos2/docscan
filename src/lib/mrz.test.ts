@@ -81,6 +81,11 @@ test("findIssueDate returns the only date that is neither birth nor expiry", () 
   expect(findIssueDate(["01.01.2010", "01.01.2011"], "1990-01-01", "2030-01-01")).toBe("")
 })
 
+test("findIssueDate ignores a misread date that isn't on the calendar", () => {
+  expect(findIssueDate(["31.02.2019", "12.08.1964", "28.02.2027"], "1964-08-12", "2027-02-28")).toBe("")
+  expect(findIssueDate(["31 FEB 2019", "15.03.2019"], "1964-08-12", "2027-02-28")).toBe("2019-03-15")
+})
+
 test("maskDmy adds the dots a numeric keypad lacks and dmyToIso accepts only real dates", () => {
   expect(["1", "19", "190", "1907", "19072016", "19.07.2016", "19/07/20161"].map(maskDmy)).toEqual(["1", "19", "19.0", "19.07", "19.07.2016", "19.07.2016", "19.07.2016"])
   expect(["19.07.2016", "29.02.2024", "31.02.2020", "19.07.201", ""].map(dmyToIso)).toEqual(["2016-07-19", "2024-02-29", "", "", ""])
