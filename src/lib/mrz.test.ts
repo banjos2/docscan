@@ -99,13 +99,18 @@ test("validate requires key fields and Latin-1 text", () => {
   expect(Object.keys(errors).sort()).toEqual(["birthDate", "docNumber", "expiryDate", "firstName", "nationality", "placeOfBirth", "surname"])
   expect(errors.placeOfBirth).toBe("Анкета заполняется латиницей")
   // Covering: DEL (0x7F) and C1 control (0x85) must be rejected
-  expect(validate({ ...emptyValues(), address1: `Berlin${String.fromCharCode(0x7f)}` }, TODAY).errors.address1).toBe("Анкета заполняется латиницей")
-  expect(validate({ ...emptyValues(), address1: `Berlin${String.fromCharCode(0x85)}` }, TODAY).errors.address1).toBe("Анкета заполняется латиницей")
+  expect(validate({ ...emptyValues(), regStreet: `Berlin${String.fromCharCode(0x7f)}` }, TODAY).errors.regStreet).toBe("Анкета заполняется латиницей")
+  expect(validate({ ...emptyValues(), regStreet: `Berlin${String.fromCharCode(0x85)}` }, TODAY).errors.regStreet).toBe("Анкета заполняется латиницей")
 })
 
 test("validate skips the sponsor field when the payer is not the sponsor", () => {
   const { errors } = validate({ ...emptyValues(), payer: "self", sponsorWho: "Мать" }, TODAY)
   expect(errors.sponsorWho).toBeUndefined()
+})
+
+test("validate ignores a hidden field even in Cyrillic, and checks it once it shows", () => {
+  expect(validate({ ...emptyValues(), employment: "pensioner", employerName: "Ромашка" }, TODAY).errors.employerName).toBeUndefined()
+  expect(validate({ ...emptyValues(), employment: "employed", employerName: "Ромашка" }, TODAY).errors.employerName).toBe("Анкета заполняется латиницей")
 })
 
 test("validate warns about passport validity", () => {

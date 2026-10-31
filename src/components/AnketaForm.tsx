@@ -6,7 +6,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { MEANS, OPTIONS, SCHENGEN, type ChoiceKey, type Source, type Sources, type Values } from "@/lib/anketa"
+import { ACTUAL_ADDRESS, EMPLOYMENT, MEANS, OPTIONS, SCHENGEN, visible, type ChoiceKey, type Source, type Sources, type Values } from "@/lib/anketa"
 import { CITIES } from "@/lib/cities"
 import { printedText } from "@/lib/print"
 import { TEMPLATES, type PrintKey, type Template } from "@/lib/template"
@@ -15,10 +15,9 @@ import type { Errors } from "@/lib/validate"
 
 type Field = {
   key: keyof Values
-  label: string
+  label: string | ((v: Values) => string)
   type?: "text" | "date" | "email" | "tel" | "select" | "means"
   wide?: boolean
-  show?: (v: Values) => boolean
   // Choices of a select; OPTIONS[key] when absent.
   options?: (t: Template) => Record<string, string>
   // The blank's cell that shows this value in the template's language: "в анкете: ..." under the field.
@@ -50,15 +49,47 @@ const SECTIONS: { title: string; description: string; fromDoc?: boolean; fields:
     ],
   },
   {
-    title: "Поездка и контакты",
-    description: "Этих данных нет в документе.",
+    title: "Адрес и контакты",
+    description: "Пункты 19–20. Этих данных нет в документе.",
     fields: [
-      { key: "address1", label: "19. Адрес", wide: true },
-      { key: "address2", label: "19. Адрес, продолжение", wide: true },
+      { key: "regCountry", label: "19. Прописка: страна" },
+      { key: "regCity", label: "19. Прописка: город" },
+      { key: "regStreet", label: "19. Прописка: улица", wide: true },
+      { key: "regHouse", label: "19. Прописка: дом" },
+      { key: "regFlat", label: "19. Прописка: квартира" },
+      { key: "regPostcode", label: "19. Прописка: индекс" },
+      { key: "actualDiffers", label: "19. Фактический адрес", type: "select", options: () => ACTUAL_ADDRESS },
+      { key: "actualCountry", label: "19. Фактический адрес: страна" },
+      { key: "actualCity", label: "19. Фактический адрес: город" },
+      { key: "actualStreet", label: "19. Фактический адрес: улица", wide: true },
+      { key: "actualHouse", label: "19. Фактический адрес: дом" },
+      { key: "actualFlat", label: "19. Фактический адрес: квартира" },
+      { key: "actualPostcode", label: "19. Фактический адрес: индекс" },
       { key: "email", label: "19. E-mail", type: "email" },
       { key: "phone", label: "19. Телефон", type: "tel" },
       { key: "residesElsewhere", label: "20. Живёте не в стране гражданства", type: "select" },
-      { key: "profession", label: "21. Профессия" },
+    ],
+  },
+  {
+    title: "Работа или учёба",
+    description: "Пункты 21–22. Что спрашивать дальше, зависит от статуса.",
+    fields: [
+      { key: "employment", label: "21. Статус занятости", type: "select", options: () => EMPLOYMENT, hint: "profession" },
+      { key: "position", label: "21. Должность" },
+      {
+        key: "employerName",
+        label: (v) => (v.employment === "pupil" || v.employment === "student" ? "22. Учебное заведение" : "22. Место работы"),
+        wide: true,
+      },
+      { key: "employerAddress", label: "22. Адрес", wide: true },
+      { key: "employerPhone", label: "22. Телефон", type: "tel" },
+      { key: "employerEmail", label: "22. E-mail", type: "email" },
+    ],
+  },
+  {
+    title: "Поездка",
+    description: "Этих данных нет в документе.",
+    fields: [
       { key: "purpose", label: "23. Цель поездки", type: "select" },
       { key: "destination", label: "25. Страна назначения" },
       { key: "firstEntry", label: "26. Страна первого въезда", type: "select", options: () => SCHENGEN, hint: "firstEntry" },
@@ -71,7 +102,7 @@ const SECTIONS: { title: string; description: string; fromDoc?: boolean; fields:
       { key: "hostAddress2", label: "31. Адрес, продолжение", wide: true },
       { key: "hostPhone", label: "31. Телефон", type: "tel" },
       { key: "payer", label: "33. Расходы оплачивает", type: "select" },
-      { key: "sponsorWho", label: "33. Кто спонсор", show: (v) => v.payer === "sponsor" },
+      { key: "sponsorWho", label: "33. Кто спонсор" },
       { key: "means", label: "33. Средства", type: "means", wide: true },
       {
         key: "submissionCity",
@@ -127,7 +158,7 @@ export function AnketaForm({ values, sources, errors, template, onChange, onTemp
           </CardHeader>
           <CardContent className="grid gap-x-4 gap-y-5 sm:grid-cols-2">
             {s.fields
-              .filter((f) => f.show?.(values) ?? true)
+              .filter((f) => visible(f.key, values))
               .map((f) => (
                 <FieldRow
                   key={f.key}
@@ -208,6 +239,7 @@ function FieldRow({
   onChange: Props["onChange"]
 }) {
   const id = `field-${f.key}`
+  const label = typeof f.label === "function" ? f.label(values) : f.label
   const errorId = error ? `${id}-error` : undefined
   const hint = f.hint && printed[f.hint]
   const hintId = hint ? `${id}-hint` : undefined
@@ -266,10 +298,10 @@ function FieldRow({
       <div className="flex min-h-5 items-center justify-between gap-2">
         {f.type === "means" ? (
           <span id={`${id}-label`} className="text-sm font-medium">
-            {f.label}
+            {label}
           </span>
         ) : (
-          <Label htmlFor={id}>{f.label}</Label>
+          <Label htmlFor={id}>{label}</Label>
         )}
         {badge}
       </div>

@@ -69,17 +69,34 @@ export const SCHENGEN = {
 
 export type SchengenCode = keyof typeof SCHENGEN
 
+export const EMPLOYMENT = {
+  employed: "Работает по найму",
+  unemployed: "Безработный",
+  pupil: "Школьник",
+  student: "Студент",
+  pensioner: "Пенсионер",
+  entrepreneur: "Индивидуальный предприниматель",
+  selfEmployed: "Самозанятый",
+} satisfies Record<string, string>
+
+export type EmploymentCode = keyof typeof EMPLOYMENT
+
+export const ACTUAL_ADDRESS = { no: "Совпадает с пропиской", yes: "Другой" } satisfies Record<string, string>
+
 export const TEXT_KEYS = [
   "surname", "surnameAtBirth", "firstName", "birthDate", "placeOfBirth", "countryOfBirth",
   "nationality", "nationalityAtBirth", "nationalId", "docNumber", "issueDate", "expiryDate", "issuedBy",
-  "address1", "address2", "email", "phone", "profession", "destination",
+  "regCountry", "regCity", "regStreet", "regHouse", "regFlat", "regPostcode",
+  "actualCountry", "actualCity", "actualStreet", "actualHouse", "actualFlat", "actualPostcode",
+  "email", "phone", "position", "employerName", "employerAddress", "employerPhone", "employerEmail", "destination",
   "arrivalDate", "departureDate", "host", "hostAddress1", "hostAddress2", "hostPhone",
   "sponsorWho", "submissionDate",
 ] as const
 
 export type TextKey = (typeof TEXT_KEYS)[number]
-// Fields chosen from a list that isn't a fixed OPTIONS table: Schengen states, the template's cities.
-export type SelectKey = "firstEntry" | "submissionCity"
+// Fields chosen from a list that isn't a fixed OPTIONS table: Schengen states, the template's cities,
+// employment status, whether the actual address differs from the registered one.
+export type SelectKey = "firstEntry" | "submissionCity" | "employment" | "actualDiffers"
 export type Values = Record<TextKey | ChoiceKey | SelectKey, string> & { means: string[] }
 export type Sources = Partial<Record<keyof Values, Source>>
 
@@ -111,10 +128,23 @@ export const parseDmy = (text: string) =>
 
 export const showDmy = (value: string) => (realIso(value) ? toDmy(value, ".") : value)
 
+const EMPLOYER_KEYS: readonly (keyof Values)[] = ["employerName", "employerAddress", "employerPhone", "employerEmail"]
+const ACTUAL_KEYS: readonly (keyof Values)[] = ["actualCountry", "actualCity", "actualStreet", "actualHouse", "actualFlat", "actualPostcode"]
+
+// Whether a field applies to this applicant. The form shows it, printedText prints it and validate checks it only then.
+export function visible(key: keyof Values, v: Values): boolean {
+  if (key === "sponsorWho") return v.payer === "sponsor"
+  if (key === "position") return !["unemployed", "pupil", "student", "pensioner"].includes(v.employment)
+  if (EMPLOYER_KEYS.includes(key)) return !["unemployed", "pensioner"].includes(v.employment)
+  if (ACTUAL_KEYS.includes(key)) return v.actualDiffers === "yes"
+  return true
+}
+
 export function emptyValues(): Values {
   const blank = Object.fromEntries([...TEXT_KEYS, ...Object.keys(OPTIONS)].map((k) => [k, ""]))
   return {
-    ...(blank as Record<TextKey | ChoiceKey | SelectKey, string>),
+    // Every SelectKey gets its default below: a missing one is a type error.
+    ...(blank as Record<TextKey | ChoiceKey, string>),
     docType: "ordinary",
     residesElsewhere: "no",
     entries: "multiple",
@@ -123,5 +153,7 @@ export function emptyValues(): Values {
     means: [],
     firstEntry: "PL",
     submissionCity: "",
+    employment: "",
+    actualDiffers: "no",
   }
 }

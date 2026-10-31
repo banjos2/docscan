@@ -24,6 +24,7 @@ const TEXT: Record<PrintKey, TextPos> = {
   email: at(1, 51, 641.7, 9, 240),
   phone: at(1, 336.4, 652.3, 9, 210),
   profession: at(1, 296.9, 561.4, 9, 250),
+  employer: at(1, 51, 517, 9, 490),
   destination: at(1, 91, 366.4, 11, 200),
   firstEntry: at(1, 320.6, 368.5, 11, 225),
   arrivalDate: at(1, 390, 287.1, 10, 150),
@@ -103,12 +104,23 @@ const SCHENGEN: Template["schengen"] = {
   EE: "ESTONIA",
 }
 
+const EMPLOYMENT: Template["employment"] = {
+  employed: "EMPLEADO",
+  unemployed: "DESEMPLEADO",
+  pupil: "ESCOLAR",
+  student: "ESTUDIANTE",
+  pensioner: "JUBILADO",
+  entrepreneur: "EMPRESARIO INDIVIDUAL",
+  selfEmployed: "TRABAJADOR AUTÓNOMO",
+}
+
 export const ES: Template = {
   country: "ES",
   label: "Испания",
   pdf: "anketa-template.pdf",
   formatDate: (iso) => toDmy(iso),
   schengen: SCHENGEN,
+  employment: EMPLOYMENT,
   text: TEXT,
   boxes: BOXES,
   sponsorOther: SPONSOR_OTHER,

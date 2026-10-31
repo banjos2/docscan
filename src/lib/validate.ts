@@ -1,4 +1,4 @@
-import { DATE_KEYS, isoDate, realIso, REQUIRED, TEXT_KEYS, type Values } from "./anketa"
+import { DATE_KEYS, isoDate, realIso, REQUIRED, TEXT_KEYS, visible, type Values } from "./anketa"
 
 export type Errors = Partial<Record<keyof Values, string>>
 
@@ -14,7 +14,7 @@ export function validate(v: Values, today = new Date()): { errors: Errors; warni
   const errors: Errors = {}
   for (const k of REQUIRED) if (!v[k].trim()) errors[k] = "Обязательное поле"
   for (const k of TEXT_KEYS) {
-    if (k === "sponsorWho" && v.payer !== "sponsor") continue
+    if (!visible(k, v)) continue
     if (!LATIN.test(v[k])) errors[k] = "Анкета заполняется латиницей"
   }
 
