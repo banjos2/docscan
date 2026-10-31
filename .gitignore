@@ -26,3 +26,7 @@ public/ort/
 *.njsproj
 *.sln
 *.sw?
+
+# Local agent scratch: worktrees and plan-execution workspaces.
+.claude/worktrees/
+.superpowers/
