@@ -65,3 +65,21 @@ test("item 22 joins name, address and phone, never the e-mail, and is left out f
 test("every employment status has a name in the template", () => {
   expect(Object.keys(ES.employment).sort()).toEqual(Object.keys(EMPLOYMENT).sort())
 })
+
+test("item 31 prints the person as SURNAME FIRSTNAME, or the hotel name", () => {
+  const host = { hostSurname: "Garcia Lopez", hostFirstName: "Ana", hotelName: "Hotel Ejemplo" }
+  expect(printedText({ ...SPECIMEN, ...host, hostKind: "person" }, ES).host).toBe("GARCIA LOPEZ ANA")
+  expect(printedText({ ...SPECIMEN, ...host, hostKind: "hotel" }, ES).host).toBe("HOTEL EJEMPLO")
+})
+
+test("items 31 and 32 print together, e-mails as typed", () => {
+  const p = printedText({
+    ...SPECIMEN, hostKind: "hotel", hotelName: "Hotel Ejemplo", hostEmail: "Reservas@Ejemplo.example",
+    orgName: "Acme SL", orgAddress: "Calle Mayor 1, Madrid", orgContactSurname: "Perez", orgContactFirstName: "Juan",
+    orgPhone: "+34 910 000 001", orgEmail: "Juan.Perez@acme.example",
+  }, ES)
+  expect(p).toMatchObject({
+    host: "HOTEL EJEMPLO", hostEmail: "Reservas@Ejemplo.example",
+    org: "ACME SL, CALLE MAYOR 1, MADRID", orgContact: "PEREZ JUAN", orgContactEmail: "Juan.Perez@acme.example", orgPhone: "+34 910 000 001",
+  })
+})

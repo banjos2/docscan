@@ -83,20 +83,23 @@ export type EmploymentCode = keyof typeof EMPLOYMENT
 
 export const ACTUAL_ADDRESS = { no: "Совпадает с пропиской", yes: "Другой" } satisfies Record<string, string>
 
+export const HOST_KIND = { person: "Частное лицо", hotel: "Гостиница" } satisfies Record<string, string>
+
 export const TEXT_KEYS = [
   "surname", "surnameAtBirth", "firstName", "birthDate", "placeOfBirth", "countryOfBirth",
   "nationality", "nationalityAtBirth", "nationalId", "docNumber", "issueDate", "expiryDate", "issuedBy",
   "regCountry", "regCity", "regStreet", "regHouse", "regFlat", "regPostcode",
   "actualCountry", "actualCity", "actualStreet", "actualHouse", "actualFlat", "actualPostcode",
   "email", "phone", "position", "employerName", "employerAddress", "employerPhone", "employerEmail", "destination",
-  "arrivalDate", "departureDate", "host", "hostAddress1", "hostAddress2", "hostPhone",
+  "arrivalDate", "departureDate", "hostSurname", "hostFirstName", "hotelName", "hostAddress1", "hostAddress2", "hostPhone", "hostEmail",
+  "orgName", "orgAddress", "orgContactSurname", "orgContactFirstName", "orgPhone", "orgEmail",
   "sponsorWho", "submissionDate",
 ] as const
 
 export type TextKey = (typeof TEXT_KEYS)[number]
 // Fields chosen from a list that isn't a fixed OPTIONS table: Schengen states, the template's cities,
-// employment status, whether the actual address differs from the registered one.
-export type SelectKey = "firstEntry" | "submissionCity" | "employment" | "actualDiffers"
+// employment status, whether the actual address differs from the registered one, person or hotel as the host.
+export type SelectKey = "firstEntry" | "submissionCity" | "employment" | "actualDiffers" | "hostKind"
 export type Values = Record<TextKey | ChoiceKey | SelectKey, string> & { means: string[] }
 export type Sources = Partial<Record<keyof Values, Source>>
 
@@ -137,6 +140,8 @@ export function visible(key: keyof Values, v: Values): boolean {
   if (key === "position") return !["unemployed", "pupil", "student", "pensioner"].includes(v.employment)
   if (EMPLOYER_KEYS.includes(key)) return !["unemployed", "pensioner"].includes(v.employment)
   if (ACTUAL_KEYS.includes(key)) return v.actualDiffers === "yes"
+  if (key === "hotelName") return v.hostKind === "hotel"
+  if (key === "hostSurname" || key === "hostFirstName") return v.hostKind === "person"
   return true
 }
 
@@ -155,5 +160,6 @@ export function emptyValues(): Values {
     submissionCity: "",
     employment: "",
     actualDiffers: "no",
+    hostKind: "person",
   }
 }

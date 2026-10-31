@@ -6,14 +6,14 @@ export type Pos = { page: number; x: number; y: number }
 export type TextPos = Pos & { size: number; maxWidth: number }
 
 // The blank's text cells. Its own list, not TEXT_KEYS: a cell isn't always one typed field
-// (firstEntry and place come from lists, "date" is the submission date, address1/2, profession
-// and employer are put together from several fields).
+// (firstEntry and place come from lists, "date" is the submission date, address1/2, profession,
+// employer, host, org and orgContact are put together from several fields).
 export const PRINT_KEYS = [
   "surname", "surnameAtBirth", "firstName", "birthDate", "placeOfBirth", "countryOfBirth",
   "nationality", "nationalityAtBirth", "nationalId", "docNumber", "issueDate", "expiryDate", "issuedBy",
   "address1", "address2", "email", "phone", "profession", "employer", "destination", "firstEntry",
-  "arrivalDate", "departureDate", "host", "hostAddress1", "hostAddress2", "hostPhone",
-  "sponsorWho", "place", "date",
+  "arrivalDate", "departureDate", "host", "hostAddress1", "hostAddress2", "hostPhone", "hostEmail",
+  "org", "orgContact", "orgContactEmail", "orgPhone", "sponsorWho", "place", "date",
 ] as const
 
 export type PrintKey = (typeof PRINT_KEYS)[number]

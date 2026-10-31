@@ -6,7 +6,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ACTUAL_ADDRESS, EMPLOYMENT, MEANS, OPTIONS, SCHENGEN, visible, type ChoiceKey, type Source, type Sources, type Values } from "@/lib/anketa"
+import { ACTUAL_ADDRESS, EMPLOYMENT, HOST_KIND, MEANS, OPTIONS, SCHENGEN, visible, type ChoiceKey, type Source, type Sources, type Values } from "@/lib/anketa"
 import { CITIES } from "@/lib/cities"
 import { printedText } from "@/lib/print"
 import { TEMPLATES, type PrintKey, type Template } from "@/lib/template"
@@ -97,10 +97,6 @@ const SECTIONS: { title: string; description: string; fromDoc?: boolean; fields:
       { key: "arrivalDate", label: "28. Дата въезда", type: "date" },
       { key: "departureDate", label: "28. Дата выезда", type: "date" },
       { key: "fingerprints", label: "29. Сдавали отпечатки для шенгенской визы", type: "select" },
-      { key: "host", label: "31. Приглашающий или отель", wide: true },
-      { key: "hostAddress1", label: "31. Адрес", wide: true },
-      { key: "hostAddress2", label: "31. Адрес, продолжение", wide: true },
-      { key: "hostPhone", label: "31. Телефон", type: "tel" },
       { key: "payer", label: "33. Расходы оплачивает", type: "select" },
       { key: "sponsorWho", label: "33. Кто спонсор" },
       { key: "means", label: "33. Средства", type: "means", wide: true },
@@ -112,6 +108,26 @@ const SECTIONS: { title: string; description: string; fromDoc?: boolean; fields:
         hint: "place",
       },
       { key: "submissionDate", label: "Дата подачи", type: "date" },
+    ],
+  },
+  {
+    title: "Приглашающая сторона",
+    description: "Пункты 31–32. Необязательные поля: частное лицо или гостиница, и организация.",
+    fields: [
+      { key: "hostKind", label: "31. Кто приглашает", type: "select", options: () => HOST_KIND },
+      { key: "hostSurname", label: "31. Фамилия" },
+      { key: "hostFirstName", label: "31. Имя" },
+      { key: "hotelName", label: "31. Название гостиницы" },
+      { key: "hostAddress1", label: "31. Адрес", wide: true },
+      { key: "hostAddress2", label: "31. Адрес, продолжение", wide: true },
+      { key: "hostPhone", label: "31. Телефон", type: "tel" },
+      { key: "hostEmail", label: "31. E-mail", type: "email" },
+      { key: "orgName", label: "32. Организация", wide: true },
+      { key: "orgAddress", label: "32. Адрес организации", wide: true },
+      { key: "orgContactSurname", label: "32. Фамилия контактного лица" },
+      { key: "orgContactFirstName", label: "32. Имя контактного лица" },
+      { key: "orgPhone", label: "32. Телефон", type: "tel" },
+      { key: "orgEmail", label: "32. E-mail контактного лица", type: "email" },
     ],
   },
 ]

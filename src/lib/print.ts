@@ -4,9 +4,11 @@ import { PRINT_KEYS, type PrintKey, type Template } from "./template"
 
 export type Address = Record<"country" | "city" | "street" | "house" | "flat" | "postcode", string>
 
-// Item 19 has two lines: "street house-flat" and "postcode city, country". A missing part leaves no stray space, comma or dash.
+// The non-empty parts, trimmed, with sep between them: a missing part leaves no stray space, comma or dash.
+const join = (sep: string, ...parts: string[]) => parts.map((s) => s.trim()).filter(Boolean).join(sep)
+
+// Item 19 has two lines: "street house-flat" and "postcode city, country".
 export function addressLines(a: Address): [string, string] {
-  const join = (sep: string, ...parts: string[]) => parts.map((s) => s.trim()).filter(Boolean).join(sep)
   return [join(" ", a.street, join("-", a.house, a.flat)), join(", ", join(" ", a.postcode, a.city), a.country)]
 }
 
@@ -29,13 +31,17 @@ function cellText(key: PrintKey, v: Values, t: Template): string {
   if (key === "profession") return shown(v, "position").trim().toUpperCase() || (t.employment[v.employment as EmploymentCode] ?? "")
   // The employer's e-mail is typed in but the blank has no place for it.
   if (key === "employer")
-    return [shown(v, "employerName"), shown(v, "employerAddress"), shown(v, "employerPhone")]
-      .map((s) => s.trim()).filter(Boolean).join(", ").toUpperCase()
+    return join(", ", shown(v, "employerName"), shown(v, "employerAddress"), shown(v, "employerPhone")).toUpperCase()
+  // One line for the name: the hotel, or the person as "surname first name" (only one of the kinds is visible).
+  if (key === "host") return join(" ", shown(v, "hotelName"), shown(v, "hostSurname"), shown(v, "hostFirstName")).toUpperCase()
+  if (key === "org") return join(", ", shown(v, "orgName"), shown(v, "orgAddress")).toUpperCase()
+  if (key === "orgContact") return join(" ", shown(v, "orgContactSurname"), shown(v, "orgContactFirstName")).toUpperCase()
+  if (key === "orgContactEmail") return shown(v, "orgEmail").trim()
   const field = key === "date" ? "submissionDate" : key
   const text = shown(v, field).trim()
   if (!text) return ""
   if (DATE_KEYS.includes(field)) return t.formatDate(text)
-  return key === "email" ? text : text.toUpperCase()
+  return key === "email" || key === "hostEmail" ? text : text.toUpperCase()
 }
 
 // What goes into each cell of the blank: capitals except e-mail, dates as the template writes them, nothing for empty.
