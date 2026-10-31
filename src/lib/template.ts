@@ -1,10 +1,12 @@
-import type { ChoiceKey, MEANS, OPTIONS } from "./anketa"
+import type { ChoiceKey, MEANS, OPTIONS, SchengenCode } from "./anketa"
+import type { CountryCode } from "./cities"
 import { ES } from "./templates/es"
 
 export type Pos = { page: number; x: number; y: number }
 export type TextPos = Pos & { size: number; maxWidth: number }
 
-// The blank's text cells. Its own list, not TEXT_KEYS: a cell isn't always one form field ("date" is the signing date).
+// The blank's text cells. Its own list, not TEXT_KEYS: a cell isn't always one typed field
+// (firstEntry and place come from lists, "date" is the submission date).
 export const PRINT_KEYS = [
   "surname", "surnameAtBirth", "firstName", "birthDate", "placeOfBirth", "countryOfBirth",
   "nationality", "nationalityAtBirth", "nationalId", "docNumber", "issueDate", "expiryDate", "issuedBy",
@@ -17,10 +19,12 @@ export type PrintKey = (typeof PRINT_KEYS)[number]
 
 // One blank form: which PDF, where each value goes on it, how it writes dates.
 export type Template = {
-  country: "ES"
+  country: CountryCode
   label: string
   pdf: string
   formatDate: (iso: string) => string
+  // The Schengen states as the blank writes them.
+  schengen: Record<SchengenCode, string>
   text: Record<PrintKey, TextPos>
   boxes: { [K in ChoiceKey]: Record<keyof (typeof OPTIONS)[K], Pos> }
   sponsorOther: Pos

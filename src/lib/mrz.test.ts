@@ -95,32 +95,36 @@ test("maskDmy adds the dots a numeric keypad lacks; parseDmy stores only real da
 })
 
 test("validate requires key fields and Latin-1 text", () => {
-  const { errors } = validate({ ...emptyValues(TODAY), placeOfBirth: "Минск" }, TODAY)
+  const { errors } = validate({ ...emptyValues(), placeOfBirth: "Минск" }, TODAY)
   expect(Object.keys(errors).sort()).toEqual(["birthDate", "docNumber", "expiryDate", "firstName", "nationality", "placeOfBirth", "surname"])
   expect(errors.placeOfBirth).toBe("Анкета заполняется латиницей")
   // Covering: DEL (0x7F) and C1 control (0x85) must be rejected
-  expect(validate({ ...emptyValues(TODAY), address1: `Berlin${String.fromCharCode(0x7f)}` }, TODAY).errors.address1).toBe("Анкета заполняется латиницей")
-  expect(validate({ ...emptyValues(TODAY), address1: `Berlin${String.fromCharCode(0x85)}` }, TODAY).errors.address1).toBe("Анкета заполняется латиницей")
+  expect(validate({ ...emptyValues(), address1: `Berlin${String.fromCharCode(0x7f)}` }, TODAY).errors.address1).toBe("Анкета заполняется латиницей")
+  expect(validate({ ...emptyValues(), address1: `Berlin${String.fromCharCode(0x85)}` }, TODAY).errors.address1).toBe("Анкета заполняется латиницей")
 })
 
 test("validate skips the sponsor field when the payer is not the sponsor", () => {
-  const { errors } = validate({ ...emptyValues(TODAY), payer: "self", sponsorWho: "Мать" }, TODAY)
+  const { errors } = validate({ ...emptyValues(), payer: "self", sponsorWho: "Мать" }, TODAY)
   expect(errors.sponsorWho).toBeUndefined()
 })
 
 test("validate warns about passport validity", () => {
-  const v = { ...emptyValues(TODAY), expiryDate: "2026-12-01", departureDate: "2026-11-16", issueDate: "2015-01-01", birthDate: "2030-01-01" }
+  const v = { ...emptyValues(), expiryDate: "2026-12-01", departureDate: "2026-11-16", issueDate: "2015-01-01", birthDate: "2030-01-01" }
   expect(validate(v, TODAY).warnings).toHaveLength(3)
   expect(validate({ ...v, expiryDate: "2026-01-01" }, TODAY).warnings).toHaveLength(4)
   expect(validate({ ...v, expiryDate: "2030-01-01", issueDate: "2020-01-01", birthDate: "1990-01-01" }, TODAY).warnings).toHaveLength(0)
 })
 
 test("validate flags a date left unfinished or impossible instead of letting the PDF go out without it", () => {
-  const v = { ...emptyValues(TODAY), expiryDate: "31.02.2020", departureDate: "12.03.20", issueDate: "2015-01-01" }
+  const v = { ...emptyValues(), expiryDate: "31.02.2020", departureDate: "12.03.20", issueDate: "2015-01-01" }
   const { errors, warnings } = validate(v, TODAY)
   expect(errors.expiryDate).toBe("Проверьте дату: ДД.ММ.ГГГГ")
   expect(errors.departureDate).toBe("Проверьте дату: ДД.ММ.ГГГГ")
   expect(errors.issueDate).toBeUndefined()
   // Only real dates are compared: the issue date alone is old enough to warn about.
   expect(warnings).toEqual(["Паспорт выдан больше 10 лет назад: для шенгенской визы он не подойдёт."])
+})
+
+test("validate stops the PDF on an unfinished submission date", () => {
+  expect(validate({ ...emptyValues(), submissionDate: "20.11.20" }, TODAY).errors.submissionDate).toBe("Проверьте дату: ДД.ММ.ГГГГ")
 })

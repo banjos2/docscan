@@ -95,11 +95,20 @@ const MEANS_BOXES: Template["meansBoxes"] = {
   },
 }
 
+const SCHENGEN: Template["schengen"] = {
+  AT: "AUSTRIA", BE: "BÉLGICA", BG: "BULGARIA", HU: "HUNGRÍA", DE: "ALEMANIA", GR: "GRECIA", DK: "DINAMARCA",
+  IS: "ISLANDIA", ES: "ESPAÑA", IT: "ITALIA", LV: "LETONIA", LT: "LITUANIA", LI: "LIECHTENSTEIN", LU: "LUXEMBURGO",
+  MT: "MALTA", NL: "PAÍSES BAJOS", NO: "NORUEGA", PL: "POLONIA", PT: "PORTUGAL", RO: "RUMANÍA", SK: "ESLOVAQUIA",
+  SI: "ESLOVENIA", FI: "FINLANDIA", FR: "FRANCIA", HR: "CROACIA", CZ: "CHEQUIA", CH: "SUIZA", SE: "SUECIA",
+  EE: "ESTONIA",
+}
+
 export const ES: Template = {
   country: "ES",
   label: "Испания",
   pdf: "anketa-template.pdf",
   formatDate: (iso) => toDmy(iso),
+  schengen: SCHENGEN,
   text: TEXT,
   boxes: BOXES,
   sponsorOther: SPONSOR_OTHER,

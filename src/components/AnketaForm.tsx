@@ -6,7 +6,10 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { MEANS, OPTIONS, type ChoiceKey, type Source, type Sources, type Values } from "@/lib/anketa"
+import { MEANS, OPTIONS, SCHENGEN, type ChoiceKey, type Source, type Sources, type Values } from "@/lib/anketa"
+import { CITIES } from "@/lib/cities"
+import { printedText } from "@/lib/print"
+import { TEMPLATES, type PrintKey, type Template } from "@/lib/template"
 import { cn } from "@/lib/utils"
 import type { Errors } from "@/lib/validate"
 
@@ -16,6 +19,10 @@ type Field = {
   type?: "text" | "date" | "email" | "tel" | "select" | "means"
   wide?: boolean
   show?: (v: Values) => boolean
+  // Choices of a select; OPTIONS[key] when absent.
+  options?: (t: Template) => Record<string, string>
+  // The blank's cell that shows this value in the template's language: "в анкете: ..." under the field.
+  hint?: PrintKey
 }
 
 const SECTIONS: { title: string; description: string; fromDoc?: boolean; fields: Field[] }[] = [
@@ -54,7 +61,7 @@ const SECTIONS: { title: string; description: string; fromDoc?: boolean; fields:
       { key: "profession", label: "21. Профессия" },
       { key: "purpose", label: "23. Цель поездки", type: "select" },
       { key: "destination", label: "25. Страна назначения" },
-      { key: "firstEntry", label: "26. Страна первого въезда" },
+      { key: "firstEntry", label: "26. Страна первого въезда", type: "select", options: () => SCHENGEN, hint: "firstEntry" },
       { key: "entries", label: "27. Количество въездов", type: "select" },
       { key: "arrivalDate", label: "28. Дата въезда", type: "date" },
       { key: "departureDate", label: "28. Дата выезда", type: "date" },
@@ -66,8 +73,14 @@ const SECTIONS: { title: string; description: string; fromDoc?: boolean; fields:
       { key: "payer", label: "33. Расходы оплачивает", type: "select" },
       { key: "sponsorWho", label: "33. Кто спонсор", show: (v) => v.payer === "sponsor" },
       { key: "means", label: "33. Средства", type: "means", wide: true },
-      { key: "place", label: "Место заполнения" },
-      { key: "signDate", label: "Дата заполнения", type: "date" },
+      {
+        key: "submissionCity",
+        label: "Город подачи",
+        type: "select",
+        options: (t) => Object.fromEntries(CITIES[t.country].map((c) => [c.id, c.ru])),
+        hint: "place",
+      },
+      { key: "submissionDate", label: "Дата подачи", type: "date" },
     ],
   },
 ]
@@ -76,13 +89,36 @@ type Props = {
   values: Values
   sources: Sources
   errors: Errors
+  template: Template
   onChange: (key: keyof Values, value: string | string[]) => void
+  onTemplate: (t: Template) => void
 }
 
-export function AnketaForm({ values, sources, errors, onChange }: Props) {
+export function AnketaForm({ values, sources, errors, template, onChange, onTemplate }: Props) {
   const scanned = Object.keys(sources).length > 0
+  const printed = printedText(values, template)
   return (
     <>
+      <Card>
+        <CardHeader>
+          <CardTitle>Анкета</CardTitle>
+          <CardDescription>От страны подачи зависят бланк, названия на нём и список городов.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="field-template">Страна подачи</Label>
+            <ChoiceSelect
+              id="field-template"
+              value={template.country}
+              options={Object.fromEntries(TEMPLATES.map((t) => [t.country, t.label]))}
+              onChange={(c) => {
+                const next = TEMPLATES.find((t) => t.country === c)
+                if (next) onTemplate(next)
+              }}
+            />
+          </div>
+        </CardContent>
+      </Card>
       {SECTIONS.map((s) => (
         <Card key={s.title}>
           <CardHeader>
@@ -97,6 +133,8 @@ export function AnketaForm({ values, sources, errors, onChange }: Props) {
                   key={f.key}
                   field={f}
                   values={values}
+                  template={template}
+                  printed={printed}
                   error={errors[f.key]}
                   badge={s.fromDoc && scanned ? <SourceBadge source={sources[f.key]} /> : null}
                   onChange={onChange}
@@ -121,36 +159,70 @@ function SourceBadge({ source }: { source?: Source }) {
   return <Badge variant="outline">вручную</Badge>
 }
 
+function ChoiceSelect({
+  id,
+  value,
+  options,
+  invalid,
+  describedBy,
+  onChange,
+}: {
+  id: string
+  value: string
+  options: Record<string, string>
+  invalid?: boolean
+  describedBy?: string
+  onChange: (value: string) => void
+}) {
+  return (
+    <Select value={value} onValueChange={onChange}>
+      <SelectTrigger id={id} className="w-full" aria-invalid={invalid} aria-describedby={describedBy}>
+        <SelectValue placeholder="Выберите" />
+      </SelectTrigger>
+      <SelectContent>
+        {Object.entries(options).map(([k, label]) => (
+          <SelectItem key={k} value={k}>
+            {label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  )
+}
+
 function FieldRow({
   field: f,
   values,
+  template,
+  printed,
   error,
   badge,
   onChange,
 }: {
   field: Field
   values: Values
+  template: Template
+  printed: Partial<Record<PrintKey, string>>
   error?: string
   badge: ReactNode
   onChange: Props["onChange"]
 }) {
   const id = `field-${f.key}`
   const errorId = error ? `${id}-error` : undefined
+  const hint = f.hint && printed[f.hint]
+  const hintId = hint ? `${id}-hint` : undefined
+  const describedBy = [hintId, errorId].filter(Boolean).join(" ") || undefined
   let control: ReactNode
   if (f.type === "select") {
     control = (
-      <Select value={values[f.key] as string} onValueChange={(v) => onChange(f.key, v)}>
-        <SelectTrigger id={id} className="w-full" aria-invalid={!!error} aria-describedby={errorId}>
-          <SelectValue placeholder="Выберите" />
-        </SelectTrigger>
-        <SelectContent>
-          {Object.entries(OPTIONS[f.key as ChoiceKey]).map(([k, label]) => (
-            <SelectItem key={k} value={k}>
-              {label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <ChoiceSelect
+        id={id}
+        value={values[f.key] as string}
+        options={f.options ? f.options(template) : OPTIONS[f.key as ChoiceKey]}
+        invalid={!!error}
+        describedBy={describedBy}
+        onChange={(v) => onChange(f.key, v)}
+      />
     )
   } else if (f.type === "means") {
     const options: Record<string, string> = MEANS[values.payer as keyof typeof MEANS] ?? {}
@@ -173,7 +245,7 @@ function FieldRow({
         id={id}
         value={values[f.key] as string}
         aria-invalid={!!error}
-        aria-describedby={errorId}
+        aria-describedby={describedBy}
         onChange={(iso) => onChange(f.key, iso)}
       />
     )
@@ -184,7 +256,7 @@ function FieldRow({
         type={f.type ?? "text"}
         value={values[f.key] as string}
         aria-invalid={!!error}
-        aria-describedby={errorId}
+        aria-describedby={describedBy}
         onChange={(e) => onChange(f.key, e.target.value)}
       />
     )
@@ -202,6 +274,11 @@ function FieldRow({
         {badge}
       </div>
       {control}
+      {hint && (
+        <p id={hintId} className="text-xs text-muted-foreground">
+          в анкете: {hint}
+        </p>
+      )}
       {error && (
         <p id={errorId} className="text-xs text-destructive">
           {error}

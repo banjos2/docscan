@@ -2,7 +2,7 @@ import { emptyValues, type Values } from "./anketa"
 
 // Fictional person from the official German passport specimen.
 export const SPECIMEN: Values = {
-  ...emptyValues(new Date("2026-09-28T12:00:00")),
+  ...emptyValues(),
   surname: "Mustermann",
   surnameAtBirth: "Gabler",
   firstName: "Erika",
@@ -24,7 +24,7 @@ export const SPECIMEN: Values = {
   profession: "Engineer",
   purpose: "tourism",
   destination: "Spain",
-  firstEntry: "Spain",
+  firstEntry: "ES",
   entries: "multiple",
   arrivalDate: "2026-11-02",
   departureDate: "2026-11-16",
@@ -35,5 +35,6 @@ export const SPECIMEN: Values = {
   payer: "sponsor",
   sponsorWho: "Mother",
   means: ["cash"],
-  place: "Koeln",
+  submissionCity: "minsk",
+  submissionDate: "2026-10-15",
 }

@@ -9,11 +9,11 @@ import { emptyValues, type Sources, type Values } from "@/lib/anketa"
 import { heicToJpeg, isHeic } from "@/lib/heic"
 import { extract, MrzNotFoundError } from "@/lib/mrz"
 import { preloadOcr, recognize, turnOver } from "@/lib/ocr"
-import { TEMPLATES } from "@/lib/template"
+import { TEMPLATES, type Template } from "@/lib/template"
 import { validate } from "@/lib/validate"
 
 export function App() {
-  const template = TEMPLATES[0]
+  const [template, setTemplate] = useState(TEMPLATES[0])
   const [values, setValues] = useState<Values>(() => emptyValues())
   const [sources, setSources] = useState<Sources>({})
   const [photo, setPhoto] = useState<string | null>(null)
@@ -98,6 +98,12 @@ export function App() {
     setPdfError(null)
   }
 
+  // The cities belong to the template's country: the old one means nothing on the new blank.
+  function changeTemplate(t: Template) {
+    setTemplate(t)
+    change("submissionCity", "")
+  }
+
   async function approve() {
     setSubmitted(true)
     setPdfError(null)
@@ -132,7 +138,14 @@ export function App() {
           <Dropzone photo={photo} busy={busy} error={ocrError} onFile={scan} />
         </section>
         <section aria-label="Анкета" className="flex flex-col gap-6">
-          <AnketaForm values={values} sources={sources} errors={submitted ? errors : {}} onChange={change} />
+          <AnketaForm
+            values={values}
+            sources={sources}
+            errors={submitted ? errors : {}}
+            template={template}
+            onChange={change}
+            onTemplate={changeTemplate}
+          />
           {warnings.length > 0 && (
             <Alert>
               <TriangleAlert />

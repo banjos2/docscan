@@ -58,20 +58,33 @@ export const MEANS = {
   },
 } satisfies Record<string, Record<string, string>>
 
+// Schengen states by ISO code, in Russian alphabetical order; the blank names them in its own language (Template.schengen).
+export const SCHENGEN = {
+  AT: "Австрия", BE: "Бельгия", BG: "Болгария", HU: "Венгрия", DE: "Германия", GR: "Греция", DK: "Дания",
+  IS: "Исландия", ES: "Испания", IT: "Италия", LV: "Латвия", LT: "Литва", LI: "Лихтенштейн", LU: "Люксембург",
+  MT: "Мальта", NL: "Нидерланды", NO: "Норвегия", PL: "Польша", PT: "Португалия", RO: "Румыния", SK: "Словакия",
+  SI: "Словения", FI: "Финляндия", FR: "Франция", HR: "Хорватия", CZ: "Чехия", CH: "Швейцария", SE: "Швеция",
+  EE: "Эстония",
+} satisfies Record<string, string>
+
+export type SchengenCode = keyof typeof SCHENGEN
+
 export const TEXT_KEYS = [
   "surname", "surnameAtBirth", "firstName", "birthDate", "placeOfBirth", "countryOfBirth",
   "nationality", "nationalityAtBirth", "nationalId", "docNumber", "issueDate", "expiryDate", "issuedBy",
-  "address1", "address2", "email", "phone", "profession", "destination", "firstEntry",
+  "address1", "address2", "email", "phone", "profession", "destination",
   "arrivalDate", "departureDate", "host", "hostAddress1", "hostAddress2", "hostPhone",
-  "sponsorWho", "place", "signDate",
+  "sponsorWho", "submissionDate",
 ] as const
 
 export type TextKey = (typeof TEXT_KEYS)[number]
-export type Values = Record<TextKey | ChoiceKey, string> & { means: string[] }
+// Fields chosen from a list that isn't a fixed OPTIONS table: Schengen states, the template's cities.
+export type SelectKey = "firstEntry" | "submissionCity"
+export type Values = Record<TextKey | ChoiceKey | SelectKey, string> & { means: string[] }
 export type Sources = Partial<Record<keyof Values, Source>>
 
 // Stored as ISO yyyy-mm-dd (or the unfinished text, see parseDmy), typed as dd.mm.yyyy, printed as dd-mm-yyyy.
-export const DATE_KEYS: readonly TextKey[] = ["birthDate", "issueDate", "expiryDate", "arrivalDate", "departureDate", "signDate"]
+export const DATE_KEYS: readonly TextKey[] = ["birthDate", "issueDate", "expiryDate", "arrivalDate", "departureDate", "submissionDate"]
 export const REQUIRED: readonly TextKey[] = ["surname", "firstName", "birthDate", "nationality", "docNumber", "expiryDate"]
 
 export const isoDate = (d: Date) =>
@@ -98,15 +111,17 @@ export const parseDmy = (text: string) =>
 
 export const showDmy = (value: string) => (realIso(value) ? toDmy(value, ".") : value)
 
-export function emptyValues(today = new Date()): Values {
+export function emptyValues(): Values {
   const blank = Object.fromEntries([...TEXT_KEYS, ...Object.keys(OPTIONS)].map((k) => [k, ""]))
   return {
-    ...(blank as Record<TextKey | ChoiceKey, string>),
+    ...(blank as Record<TextKey | ChoiceKey | SelectKey, string>),
     docType: "ordinary",
     residesElsewhere: "no",
+    entries: "multiple",
     fingerprints: "no",
     payer: "self",
     means: [],
-    signDate: isoDate(today),
+    firstEntry: "PL",
+    submissionCity: "",
   }
 }
