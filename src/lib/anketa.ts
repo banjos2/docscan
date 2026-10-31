@@ -1,6 +1,6 @@
 export type Source = "mrz" | "check" | "manual"
 
-// Keys are stable ids used by layout.ts; values are the labels shown in the form.
+// Keys are stable ids used by the templates; values are the labels shown in the form.
 export const OPTIONS = {
   sex: { M: "Мужской", F: "Женский", X: "Иное" },
   maritalStatus: {

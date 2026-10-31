@@ -9,9 +9,11 @@ import { emptyValues, type Sources, type Values } from "@/lib/anketa"
 import { heicToJpeg, isHeic } from "@/lib/heic"
 import { extract, MrzNotFoundError } from "@/lib/mrz"
 import { preloadOcr, recognize, turnOver } from "@/lib/ocr"
+import { TEMPLATES } from "@/lib/template"
 import { validate } from "@/lib/validate"
 
 export function App() {
+  const template = TEMPLATES[0]
   const [values, setValues] = useState<Values>(() => emptyValues())
   const [sources, setSources] = useState<Sources>({})
   const [photo, setPhoto] = useState<string | null>(null)
@@ -103,9 +105,9 @@ export function App() {
     setGenerating(true)
     try {
       const { fillAnketa } = await import("@/lib/pdf")
-      const res = await fetch(`${import.meta.env.BASE_URL}anketa-template.pdf`)
+      const res = await fetch(`${import.meta.env.BASE_URL}${template.pdf}`)
       if (!res.ok) throw new Error(`Не удалось загрузить шаблон анкеты: ${res.status}`)
-      const bytes = await fillAnketa(await res.arrayBuffer(), values)
+      const bytes = await fillAnketa(await res.arrayBuffer(), values, template)
       replacePdf(URL.createObjectURL(new Blob([bytes as BlobPart], { type: "application/pdf" })))
     } catch (e) {
       console.error(e)

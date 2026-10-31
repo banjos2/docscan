@@ -1,12 +1,11 @@
-import type { ChoiceKey, MEANS, OPTIONS, TextKey } from "./anketa"
-
-export type Pos = { page: number; x: number; y: number }
-export type TextPos = Pos & { size: number; maxWidth: number }
+import { toDmy } from "../anketa"
+// Types only: template.ts imports this file for TEMPLATES.
+import type { Pos, PrintKey, Template, TextPos } from "../template"
 
 const at = (page: number, x: number, y: number, size: number, maxWidth: number): TextPos => ({ page, x, y, size, maxWidth })
 const box = (page: number, x: number, y: number): Pos => ({ page, x, y })
 
-export const TEXT: Record<TextKey, TextPos> = {
+const TEXT: Record<PrintKey, TextPos> = {
   surname: at(0, 51, 589.8, 11, 390),
   surnameAtBirth: at(0, 51, 560.9, 11, 390),
   firstName: at(0, 51, 532.5, 11, 390),
@@ -35,10 +34,10 @@ export const TEXT: Record<TextKey, TextPos> = {
   hostPhone: at(2, 337.9, 746.9, 11, 210),
   sponsorWho: at(2, 409.9, 553.4, 6, 130),
   place: at(3, 70.9, 107.3, 11, 200),
-  signDate: at(3, 70.9, 96.3, 11, 200),
+  date: at(3, 70.9, 96.3, 11, 200),
 }
 
-export const BOXES: { [K in ChoiceKey]: Record<keyof (typeof OPTIONS)[K], Pos> } = {
+const BOXES: Template["boxes"] = {
   sex: { M: box(0, 55.6, 391.2), F: box(0, 121, 391.2), X: box(0, 182.6, 391.2) },
   maritalStatus: {
     single: box(0, 238.3, 391.2),
@@ -76,9 +75,9 @@ export const BOXES: { [K in ChoiceKey]: Record<keyof (typeof OPTIONS)[K], Pos> }
 }
 
 // Item 33, sponsor column: "otro (especifíquese)" — ticked when the sponsor is named.
-export const SPONSOR_OTHER = box(2, 283.7, 550.9)
+const SPONSOR_OTHER = box(2, 283.7, 550.9)
 
-export const MEANS_BOXES: { [K in keyof typeof MEANS]: Record<keyof (typeof MEANS)[K], Pos> } = {
+const MEANS_BOXES: Template["meansBoxes"] = {
   self: {
     cash: box(2, 55.6, 541.8),
     cheques: box(2, 55.6, 532.6),
@@ -94,4 +93,15 @@ export const MEANS_BOXES: { [K in keyof typeof MEANS]: Record<keyof (typeof MEAN
     transport: box(2, 269.7, 477.4),
     other: box(2, 270.4, 468.1),
   },
+}
+
+export const ES: Template = {
+  country: "ES",
+  label: "Испания",
+  pdf: "anketa-template.pdf",
+  formatDate: (iso) => toDmy(iso),
+  text: TEXT,
+  boxes: BOXES,
+  sponsorOther: SPONSOR_OTHER,
+  meansBoxes: MEANS_BOXES,
 }
