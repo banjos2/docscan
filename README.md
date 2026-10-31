@@ -42,6 +42,14 @@ python scripts/make_template.py ~/Downloads/ANKETA.pdf public/anketa-template.pd
 Файл с реальными персональными данными (`~/Downloads/ANKETA.pdf` или любой заполненный экземпляр)
 никогда не коммитится и не должен использоваться нигде, кроме этой команды.
 
+## Города и бланки других стран
+
+Города подачи лежат в `src/lib/cities.ts`: у каждого русское название для списка (`ru`) и название для печати на языке
+бланка (`print`). Бланк новой страны — это файл в `src/lib/templates/`, его строка в `TEMPLATES` (`src/lib/template.ts`) и
+список городов этой страны в `cities.ts`. Координаты проверяются на глаз, по картинкам страниц:
+`osascript -l JavaScript scripts/render-pdf-page.js <файл.pdf> <папка> 0 1 2 3`. Для польского и греческого бланков вместо
+Helvetica понадобится Unicode-шрифт (см. «Потом» в `docs/superpowers/specs/2026-10-31-questionnaire-templates-design.md`).
+
 ## Шрифт
 
 VK Sans Display — корпоративный шрифт VK. Перед публичным деплоем проверьте условия его лицензии.

@@ -3,6 +3,7 @@ import { emptyValues, EMPLOYMENT, SCHENGEN } from "./anketa"
 import { CITIES } from "./cities"
 import { addressLines, printedText } from "./print"
 import { SPECIMEN } from "./specimen"
+import { TEMPLATES } from "./template"
 import { ES } from "./templates/es"
 
 test("printedText puts on paper what the form holds: capitals except e-mail, dates as the template prints them", () => {
@@ -31,9 +32,17 @@ test("printedText prints no city that the template's country doesn't list", () =
   expect(printedText({ ...SPECIMEN, submissionCity: "pinsk" }, ES)).not.toHaveProperty("place")
 })
 
+test("printedText writes dates in the template's format", () => {
+  expect(printedText(SPECIMEN, { ...ES, formatDate: (iso) => "D" + iso })).toMatchObject({ birthDate: "D1964-08-12", date: "D2026-10-15" })
+})
+
 test("every Schengen state has a name in the template and every printed name fits the PDF font", () => {
   expect(Object.keys(ES.schengen).sort()).toEqual(Object.keys(SCHENGEN).sort())
-  const printed = [...Object.values(ES.schengen), ...Object.values(CITIES).flat().map((c) => c.print)]
+  // Every template, so the next blank is checked as soon as it is in TEMPLATES.
+  const printed = [
+    ...TEMPLATES.flatMap((t) => [...Object.values(t.schengen), ...Object.values(t.employment)]),
+    ...Object.values(CITIES).flat().map((c) => c.print),
+  ]
   for (const s of printed) expect(s).toMatch(/^[\x20-\x7E\xA0-\xFF]+$/)
 })
 
