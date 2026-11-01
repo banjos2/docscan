@@ -6,19 +6,20 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ACTUAL_ADDRESS, EMPLOYMENT, HOST_KIND, MEANS, OPTIONS, SCHENGEN, visible, type ChoiceKey, type Source, type Sources, type Values } from "@/lib/anketa"
+import { ACTUAL_ADDRESS, EMPLOYMENT, HOST_KIND, ITEM_OF, MEANS, OPTIONS, SCHENGEN, visible, type ChoiceKey, type Source, type Sources, type TextKey, type Values } from "@/lib/anketa"
 import { CITIES } from "@/lib/cities"
 import { printedText, type PrintKey } from "@/lib/print"
-import { QUESTIONNAIRES, type Questionnaire } from "@/lib/questionnaire"
+import { itemLabel, itemsNote, offered, QUESTIONNAIRES, type Questionnaire } from "@/lib/questionnaire"
 import { cn } from "@/lib/utils"
 import type { Errors } from "@/lib/validate"
 
 type Field = {
   key: keyof Values
+  // Without the item number: the blank gives it (itemLabel). Items 1–16 are numbered here, on every blank alike.
   label: string | ((v: Values) => string)
   type?: "text" | "date" | "email" | "tel" | "select" | "means"
   wide?: boolean
-  // Choices of a select; OPTIONS[key] when absent.
+  // Choices of a select; the options of OPTIONS[key] the blank has a box for when absent.
   options?: (q: Questionnaire) => Record<string, string>
   // The blank's cell that shows this value as printed: "в анкете: ..." under the field.
   hint?: PrintKey
@@ -50,81 +51,90 @@ const SECTIONS: { title: string; description: string; fromDoc?: boolean; fields:
   },
   {
     title: "Адрес и контакты",
-    description: "Пункты 19–20. Этих данных нет в документе.",
+    description: "Этих данных нет в документе.",
     fields: [
-      { key: "regCountry", label: "19. Прописка: страна" },
-      { key: "regCity", label: "19. Прописка: город" },
-      { key: "regStreet", label: "19. Прописка: улица", wide: true },
-      { key: "regHouse", label: "19. Прописка: дом" },
-      { key: "regFlat", label: "19. Прописка: квартира" },
-      { key: "regPostcode", label: "19. Прописка: индекс" },
-      { key: "actualDiffers", label: "19. Фактический адрес", type: "select", options: () => ACTUAL_ADDRESS, wide: true },
-      { key: "actualCountry", label: "19. Фактический адрес: страна" },
-      { key: "actualCity", label: "19. Фактический адрес: город" },
-      { key: "actualStreet", label: "19. Фактический адрес: улица", wide: true },
-      { key: "actualHouse", label: "19. Фактический адрес: дом" },
-      { key: "actualFlat", label: "19. Фактический адрес: квартира" },
-      { key: "actualPostcode", label: "19. Фактический адрес: индекс" },
-      { key: "email", label: "19. E-mail", type: "email" },
-      { key: "phone", label: "19. Телефон", type: "tel" },
-      { key: "residesElsewhere", label: "20. Живёте не в стране гражданства", type: "select" },
+      { key: "regCountry", label: "Прописка: страна" },
+      { key: "regCity", label: "Прописка: город" },
+      { key: "regStreet", label: "Прописка: улица", wide: true },
+      { key: "regHouse", label: "Прописка: дом" },
+      { key: "regFlat", label: "Прописка: квартира" },
+      { key: "regPostcode", label: "Прописка: индекс" },
+      { key: "actualDiffers", label: "Фактический адрес", type: "select", options: () => ACTUAL_ADDRESS, wide: true },
+      { key: "actualCountry", label: "Фактический адрес: страна" },
+      { key: "actualCity", label: "Фактический адрес: город" },
+      { key: "actualStreet", label: "Фактический адрес: улица", wide: true },
+      { key: "actualHouse", label: "Фактический адрес: дом" },
+      { key: "actualFlat", label: "Фактический адрес: квартира" },
+      { key: "actualPostcode", label: "Фактический адрес: индекс" },
+      { key: "email", label: "E-mail", type: "email" },
+      { key: "phone", label: "Телефон", type: "tel" },
+      { key: "residesElsewhere", label: "Живёте не в стране гражданства", type: "select" },
     ],
   },
   {
     title: "Работа или учёба",
-    description: "Пункты 21–22. Что спрашивать дальше, зависит от статуса.",
+    description: "Что спрашивать дальше, зависит от статуса.",
     fields: [
-      { key: "employment", label: "21. Статус занятости", type: "select", options: () => EMPLOYMENT, hint: "profession" },
-      { key: "position", label: "21. Должность" },
+      { key: "employment", label: "Статус занятости", type: "select", options: () => EMPLOYMENT, hint: "profession" },
+      { key: "position", label: "Должность" },
       {
         key: "employerName",
-        label: (v) => (v.employment === "pupil" || v.employment === "student" ? "22. Учебное заведение" : "22. Место работы"),
+        label: (v) => (v.employment === "pupil" || v.employment === "student" ? "Учебное заведение" : "Место работы"),
         wide: true,
       },
-      { key: "employerAddress", label: "22. Адрес", wide: true },
-      { key: "employerPhone", label: "22. Телефон", type: "tel" },
-      { key: "employerEmail", label: "22. E-mail (в анкету не печатается)", type: "email" },
+      { key: "employerAddress", label: "Адрес", wide: true },
+      { key: "employerPhone", label: "Телефон", type: "tel" },
+      { key: "employerEmail", label: "E-mail (в анкету не печатается)", type: "email" },
     ],
   },
   {
     title: "Поездка",
     description: "Этих данных нет в документе.",
     fields: [
-      { key: "purpose", label: "23. Цель поездки", type: "select" },
-      { key: "destination", label: "25. Страна назначения" },
-      { key: "firstEntry", label: "26. Страна первого въезда", type: "select", options: () => SCHENGEN, hint: "firstEntry" },
-      { key: "entries", label: "27. Количество въездов", type: "select" },
-      { key: "arrivalDate", label: "28. Дата въезда", type: "date" },
-      { key: "departureDate", label: "28. Дата выезда", type: "date" },
-      { key: "fingerprints", label: "29. Сдавали отпечатки для шенгенской визы", type: "select" },
+      { key: "purpose", label: "Цель поездки", type: "select" },
+      { key: "kpNumber", label: "Номер Карты поляка" },
+      { key: "basis", label: "Основание" },
+      { key: "destination", label: "Страна назначения" },
+      { key: "firstEntry", label: "Страна первого въезда", type: "select", options: () => SCHENGEN, hint: "firstEntry" },
+      { key: "entries", label: "Количество въездов", type: "select" },
+      // Wide, so each period's "с" and "по" share a row.
+      { key: "prevVisas", label: "Визы за последние 5 лет", type: "select", wide: true },
+      ...[1, 2, 3, 4, 5].flatMap((n): Field[] => [
+        { key: `prevVisa${n}From` as TextKey, label: `Виза ${n}: с`, type: "date" },
+        { key: `prevVisa${n}To` as TextKey, label: `Виза ${n}: по`, type: "date" },
+      ]),
+      { key: "arrivalDate", label: "Дата въезда", type: "date" },
+      { key: "departureDate", label: "Дата выезда", type: "date" },
+      { key: "fingerprints", label: "Сдавали отпечатки для шенгенской визы", type: "select" },
     ],
   },
   {
     title: "Приглашающая сторона",
-    description: "Пункты 31–32. Необязательные поля: частное лицо или гостиница, и организация.",
+    description: "Необязательные поля: частное лицо или гостиница, и организация.",
     fields: [
-      { key: "hostKind", label: "31. Кто приглашает", type: "select", options: () => HOST_KIND, wide: true },
-      { key: "hostSurname", label: "31. Фамилия" },
-      { key: "hostFirstName", label: "31. Имя" },
-      { key: "hotelName", label: "31. Название гостиницы" },
-      { key: "hostAddress", label: "31. Адрес", wide: true },
-      { key: "hostPhone", label: "31. Телефон", type: "tel" },
-      { key: "hostEmail", label: "31. E-mail", type: "email" },
-      { key: "orgName", label: "32. Организация", wide: true },
-      { key: "orgAddress", label: "32. Адрес организации", wide: true },
-      { key: "orgContactSurname", label: "32. Фамилия контактного лица" },
-      { key: "orgContactFirstName", label: "32. Имя контактного лица" },
-      { key: "orgPhone", label: "32. Телефон", type: "tel" },
-      { key: "orgEmail", label: "32. E-mail контактного лица", type: "email" },
+      { key: "hostKind", label: "Кто приглашает", type: "select", options: () => HOST_KIND, wide: true },
+      { key: "hostSurname", label: "Фамилия" },
+      { key: "hostFirstName", label: "Имя" },
+      { key: "hotelName", label: "Название гостиницы" },
+      { key: "hostAddress", label: "Адрес", wide: true },
+      { key: "hostPhone", label: "Телефон", type: "tel" },
+      { key: "hostEmail", label: "E-mail", type: "email" },
+      { key: "orgName", label: "Организация", wide: true },
+      { key: "orgAddress", label: "Адрес организации", wide: true },
+      { key: "orgContactSurname", label: "Фамилия контактного лица" },
+      { key: "orgContactFirstName", label: "Имя контактного лица" },
+      { key: "orgPhone", label: "Телефон", type: "tel" },
+      { key: "orgEmail", label: "E-mail контактного лица", type: "email" },
     ],
   },
   {
     title: "Расходы и подача",
-    description: "Пункт 33, город и дата подачи. Этих данных нет в документе.",
+    description: "Этих данных нет в документе.",
     fields: [
-      { key: "payer", label: "33. Расходы оплачивает", type: "select" },
-      { key: "sponsorWho", label: "33. Кто спонсор" },
-      { key: "means", label: "33. Средства", type: "means", wide: true },
+      { key: "payer", label: "Расходы оплачивает", type: "select" },
+      { key: "sponsorWho", label: "Кто спонсор" },
+      { key: "means", label: "Средства", type: "means", wide: true },
+      { key: "workPermit", label: "Разрешение на работу", wide: true },
       {
         key: "submissionCity",
         label: "Город подачи",
@@ -187,14 +197,22 @@ export function AnketaForm({ values, sources, errors, questionnaire, onChange, o
           </div>
         </CardContent>
       </Card>
-      {SECTIONS.map((s) => (
-        <Card key={s.title}>
-          <CardHeader>
-            <CardTitle>{s.title}</CardTitle>
-            <CardDescription>{s.description}</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-x-4 gap-y-5 sm:grid-cols-2">
-            {subNumbered(s.fields.filter((f) => visible(f.key, values, questionnaire.items)), values).map((f) => (
+      {SECTIONS.map((s) => {
+        const { items } = questionnaire
+        const shown = s.fields.filter((f) => visible(f.key, values, items))
+        const numbers = shown.flatMap((f) => {
+          const item = ITEM_OF[f.key], n = item && items[item]
+          return typeof n === "number" ? [n] : []
+        })
+        const labelled = shown.map((f) => ({ ...f, label: itemLabel(typeof f.label === "function" ? f.label(values) : f.label, ITEM_OF[f.key], items) }))
+        return (
+          <Card key={s.title}>
+            <CardHeader>
+              <CardTitle>{s.title}</CardTitle>
+              <CardDescription>{[itemsNote(numbers), s.description].filter(Boolean).join(". ")}</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-x-4 gap-y-5 sm:grid-cols-2">
+              {subNumbered(labelled, values).map((f) => (
                 <FieldRow
                   key={f.key}
                   field={f}
@@ -206,9 +224,10 @@ export function AnketaForm({ values, sources, errors, questionnaire, onChange, o
                   onChange={onChange}
                 />
               ))}
-          </CardContent>
-        </Card>
-      ))}
+            </CardContent>
+          </Card>
+        )
+      })}
     </>
   )
 }
@@ -285,14 +304,14 @@ function FieldRow({
       <ChoiceSelect
         id={id}
         value={values[f.key] as string}
-        options={f.options ? f.options(questionnaire) : OPTIONS[f.key as ChoiceKey]}
+        options={f.options ? f.options(questionnaire) : offered(questionnaire.blank, f.key, OPTIONS[f.key as ChoiceKey])}
         invalid={!!error}
         describedBy={describedBy}
         onChange={(v) => onChange(f.key, v)}
       />
     )
   } else if (f.type === "means") {
-    const options: Record<string, string> = MEANS[values.payer as keyof typeof MEANS] ?? {}
+    const options = offered(questionnaire.blank, `means.${values.payer}`, MEANS[values.payer as keyof typeof MEANS] ?? {})
     control = (
       <div role="group" aria-labelledby={`${id}-label`} className="grid gap-2 sm:grid-cols-2">
         {Object.entries(options).map(([k, label]) => (

@@ -1,4 +1,4 @@
-import type { Items, Values } from "./anketa"
+import type { Item, Items, Values } from "./anketa"
 import { BG } from "./blanks/bg"
 import { PL_D } from "./blanks/pl-d"
 import { CITIES, type CountryCode } from "./cities"
@@ -36,6 +36,19 @@ export const QUESTIONNAIRES: Questionnaire[] = [
 export function applyQuestionnaire(v: Values, from: Questionnaire, to: Questionnaire): Values {
   const next = { ...v, ...to.presets }
   return CITIES[from.country] === CITIES[to.country] ? next : { ...next, submissionCity: "" }
+}
+
+// "28. Дата въезда" by the blank's number, the bare label where the blank prints none.
+export function itemLabel(label: string, item: Item | undefined, items: Items): string {
+  const n = item && items[item]
+  return typeof n === "number" ? `${n}. ${label}` : label
+}
+
+// "Пункты 19–20", "Пункт 33" or "" for the numbers of the fields a section shows.
+export function itemsNote(numbers: number[]): string {
+  if (!numbers.length) return ""
+  const lo = Math.min(...numbers), hi = Math.max(...numbers)
+  return lo === hi ? `Пункт ${lo}` : `Пункты ${lo}–${hi}`
 }
 
 // The options of a choice that the blank has a box for.

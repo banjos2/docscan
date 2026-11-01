@@ -2,7 +2,7 @@ import { expect, test } from "vitest"
 import { MEANS, OPTIONS } from "./anketa"
 import { PL_D } from "./blanks/pl-d"
 import { PRINT_KEYS } from "./print"
-import { applyQuestionnaire, NUMBERING_A, NUMBERING_B, NUMBERING_D, offered, QUESTIONNAIRES } from "./questionnaire"
+import { applyQuestionnaire, itemLabel, itemsNote, NUMBERING_A, NUMBERING_B, NUMBERING_D, offered, QUESTIONNAIRES } from "./questionnaire"
 import { SPECIMEN } from "./specimen"
 
 const Q = (id: string) => QUESTIONNAIRES.find((q) => q.id === id)!
@@ -20,6 +20,17 @@ test("item numbers come from the blank's family", () => {
   expect(Q("pl-kp").items.kpNumber).toBe(21)
   expect([Q("pl-work").items.basis, Q("pl-work").items.workPermit]).toEqual([21, 34])
   expect(Q("pl-guest-d").items).not.toHaveProperty("destination")
+})
+
+test("a label takes its number from the blank and has none where the blank prints none", () => {
+  expect(itemLabel("Дата въезда", "arrival", NUMBERING_A)).toBe("28. Дата въезда")
+  expect(itemLabel("Дата въезда", "arrival", NUMBERING_B)).toBe("Дата въезда")
+  expect(itemLabel("Дата въезда", "arrival", NUMBERING_D)).toBe("29. Дата въезда")
+  expect(itemLabel("1. Фамилия", undefined, NUMBERING_D)).toBe("1. Фамилия")
+})
+
+test("a section note spans the numbers its fields show", () => {
+  expect([itemsNote([19, 20, 19]), itemsNote([33]), itemsNote([])]).toEqual(["Пункты 19–20", "Пункт 33", ""])
 })
 
 test("switching applies the new questionnaire's presets and keeps everything else", () => {
