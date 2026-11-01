@@ -8,8 +8,8 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ACTUAL_ADDRESS, EMPLOYMENT, HOST_KIND, MEANS, OPTIONS, SCHENGEN, visible, type ChoiceKey, type Source, type Sources, type Values } from "@/lib/anketa"
 import { CITIES } from "@/lib/cities"
-import { printedText } from "@/lib/print"
-import { TEMPLATES, type PrintKey, type Template } from "@/lib/template"
+import { printedText, type PrintKey } from "@/lib/print"
+import { QUESTIONNAIRES, type Questionnaire } from "@/lib/questionnaire"
 import { cn } from "@/lib/utils"
 import type { Errors } from "@/lib/validate"
 
@@ -19,8 +19,8 @@ type Field = {
   type?: "text" | "date" | "email" | "tel" | "select" | "means"
   wide?: boolean
   // Choices of a select; OPTIONS[key] when absent.
-  options?: (t: Template) => Record<string, string>
-  // The blank's cell that shows this value in the template's language: "в анкете: ..." under the field.
+  options?: (q: Questionnaire) => Record<string, string>
+  // The blank's cell that shows this value as printed: "в анкете: ..." under the field.
   hint?: PrintKey
 }
 
@@ -107,8 +107,7 @@ const SECTIONS: { title: string; description: string; fromDoc?: boolean; fields:
       { key: "hostSurname", label: "31. Фамилия" },
       { key: "hostFirstName", label: "31. Имя" },
       { key: "hotelName", label: "31. Название гостиницы" },
-      { key: "hostAddress1", label: "31. Адрес", wide: true },
-      { key: "hostAddress2", label: "31. Адрес, продолжение", wide: true },
+      { key: "hostAddress", label: "31. Адрес", wide: true },
       { key: "hostPhone", label: "31. Телефон", type: "tel" },
       { key: "hostEmail", label: "31. E-mail", type: "email" },
       { key: "orgName", label: "32. Организация", wide: true },
@@ -130,7 +129,7 @@ const SECTIONS: { title: string; description: string; fromDoc?: boolean; fields:
         key: "submissionCity",
         label: "Город подачи",
         type: "select",
-        options: (t) => Object.fromEntries(CITIES[t.country].map((c) => [c.id, c.ru])),
+        options: (q) => Object.fromEntries(CITIES[q.country].map((c) => [c.id, c.ru])),
         hint: "place",
       },
       { key: "submissionDate", label: "Дата подачи", type: "date" },
@@ -155,31 +154,34 @@ type Props = {
   values: Values
   sources: Sources
   errors: Errors
-  template: Template
+  questionnaire: Questionnaire
   onChange: (key: keyof Values, value: string | string[]) => void
-  onTemplate: (t: Template) => void
+  onQuestionnaire: (q: Questionnaire) => void
 }
 
-export function AnketaForm({ values, sources, errors, template, onChange, onTemplate }: Props) {
+export function AnketaForm({ values, sources, errors, questionnaire, onChange, onQuestionnaire }: Props) {
   const scanned = Object.keys(sources).length > 0
-  const printed = printedText(values, template)
+  const printed = printedText(values, questionnaire)
   return (
     <>
       <Card>
         <CardHeader>
           <CardTitle>Анкета</CardTitle>
-          <CardDescription>От страны подачи зависят бланк, названия на нём и список городов.</CardDescription>
+          <CardDescription>От анкеты зависят бланк, пункты и их номера, список городов и предустановки.</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col gap-2">
-            <Label htmlFor="field-template">Страна подачи</Label>
+            {/* The card's title says it already. */}
+            <Label htmlFor="field-questionnaire" className="sr-only">
+              Анкета
+            </Label>
             <ChoiceSelect
-              id="field-template"
-              value={template.country}
-              options={Object.fromEntries(TEMPLATES.map((t) => [t.country, t.label]))}
-              onChange={(c) => {
-                const next = TEMPLATES.find((t) => t.country === c)
-                if (next) onTemplate(next)
+              id="field-questionnaire"
+              value={questionnaire.id}
+              options={Object.fromEntries(QUESTIONNAIRES.map((q) => [q.id, q.label]))}
+              onChange={(id) => {
+                const next = QUESTIONNAIRES.find((q) => q.id === id)
+                if (next) onQuestionnaire(next)
               }}
             />
           </div>
@@ -192,12 +194,12 @@ export function AnketaForm({ values, sources, errors, template, onChange, onTemp
             <CardDescription>{s.description}</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-x-4 gap-y-5 sm:grid-cols-2">
-            {subNumbered(s.fields.filter((f) => visible(f.key, values)), values).map((f) => (
+            {subNumbered(s.fields.filter((f) => visible(f.key, values, questionnaire.items)), values).map((f) => (
                 <FieldRow
                   key={f.key}
                   field={f}
                   values={values}
-                  template={template}
+                  questionnaire={questionnaire}
                   printed={printed}
                   error={errors[f.key]}
                   badge={s.fromDoc && scanned ? <SourceBadge source={sources[f.key]} /> : null}
@@ -257,7 +259,7 @@ function ChoiceSelect({
 function FieldRow({
   field: f,
   values,
-  template,
+  questionnaire,
   printed,
   error,
   badge,
@@ -265,7 +267,7 @@ function FieldRow({
 }: {
   field: Field
   values: Values
-  template: Template
+  questionnaire: Questionnaire
   printed: Partial<Record<PrintKey, string>>
   error?: string
   badge: ReactNode
@@ -283,7 +285,7 @@ function FieldRow({
       <ChoiceSelect
         id={id}
         value={values[f.key] as string}
-        options={f.options ? f.options(template) : OPTIONS[f.key as ChoiceKey]}
+        options={f.options ? f.options(questionnaire) : OPTIONS[f.key as ChoiceKey]}
         invalid={!!error}
         describedBy={describedBy}
         onChange={(v) => onChange(f.key, v)}

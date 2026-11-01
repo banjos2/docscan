@@ -29,19 +29,6 @@ npm run dev
 в переменной `AUTH_KEYS`. Ключ для email и пароля печатает `sh scripts/auth-key.sh`; без `AUTH_KEYS` контейнер не
 запустится. `npm run dev` вход не проверяет.
 
-## Пустой бланк анкеты
-
-`public/anketa-template.pdf` получен из заполненного `ANKETA.pdf` скриптом
-`scripts/make_template.py` (нужен PyMuPDF: `pip install pymupdf`), который вырезает из PDF
-наложенный слой с ответами, оставляя чистую форму:
-
-```bash
-python scripts/make_template.py ~/Downloads/ANKETA.pdf public/anketa-template.pdf
-```
-
-Файл с реальными персональными данными (`~/Downloads/ANKETA.pdf` или любой заполненный экземпляр)
-никогда не коммитится и не должен использоваться нигде, кроме этой команды.
-
 ## Города и бланки других стран
 
 Города подачи лежат в `src/lib/cities.ts`: у каждого русское название для списка (`ru`) и название для печати на языке

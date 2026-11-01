@@ -1,9 +1,11 @@
 import { expect, test } from "vitest"
 import { emptyValues, maskDmy, parseDmy, showDmy } from "./anketa"
 import { extract, findIssueDate, MrzNotFoundError } from "./mrz"
+import { QUESTIONNAIRES } from "./questionnaire"
 import { validate } from "./validate"
 
 const TODAY = new Date("2026-09-28T12:00:00")
+const Q = (id: string) => QUESTIONNAIRES.find((q) => q.id === id)!
 // Official German passport specimen (fictional person).
 const L1 = "P<D<<MUSTERMANN<<ERIKA<<<<<<<<<<<<<<<<<<<<<<"
 const L2 = "C01X00T478D<<6408125F2702283<<<<<<<<<<<<<<<4"
@@ -95,34 +97,35 @@ test("maskDmy adds the dots a numeric keypad lacks; parseDmy stores only real da
 })
 
 test("validate requires key fields and Latin-1 text", () => {
-  const { errors } = validate({ ...emptyValues(), placeOfBirth: "Минск" }, TODAY)
+  const { errors } = validate({ ...emptyValues(), placeOfBirth: "Минск" }, Q("pl-guest-d"), TODAY)
   expect(Object.keys(errors).sort()).toEqual(["birthDate", "docNumber", "expiryDate", "firstName", "nationality", "placeOfBirth", "surname"])
   expect(errors.placeOfBirth).toBe("Анкета заполняется латиницей")
   // Covering: DEL (0x7F) and C1 control (0x85) must be rejected
-  expect(validate({ ...emptyValues(), regStreet: `Berlin${String.fromCharCode(0x7f)}` }, TODAY).errors.regStreet).toBe("Анкета заполняется латиницей")
-  expect(validate({ ...emptyValues(), regStreet: `Berlin${String.fromCharCode(0x85)}` }, TODAY).errors.regStreet).toBe("Анкета заполняется латиницей")
+  expect(validate({ ...emptyValues(), regStreet: `Berlin${String.fromCharCode(0x7f)}` }, Q("pl-guest-d"), TODAY).errors.regStreet).toBe("Анкета заполняется латиницей")
+  expect(validate({ ...emptyValues(), regStreet: `Berlin${String.fromCharCode(0x85)}` }, Q("pl-guest-d"), TODAY).errors.regStreet).toBe("Анкета заполняется латиницей")
 })
 
 test("validate skips the sponsor field when the payer is not the sponsor", () => {
-  const { errors } = validate({ ...emptyValues(), payer: "self", sponsorWho: "Мать" }, TODAY)
+  const { errors } = validate({ ...emptyValues(), payer: "self", sponsorWho: "Мать" }, Q("pl-guest-d"), TODAY)
   expect(errors.sponsorWho).toBeUndefined()
 })
 
 test("validate ignores a hidden field even in Cyrillic, and checks it once it shows", () => {
-  expect(validate({ ...emptyValues(), employment: "pensioner", employerName: "Ромашка" }, TODAY).errors.employerName).toBeUndefined()
-  expect(validate({ ...emptyValues(), employment: "employed", employerName: "Ромашка" }, TODAY).errors.employerName).toBe("Анкета заполняется латиницей")
+  expect(validate({ ...emptyValues(), employment: "pensioner", employerName: "Ромашка" }, Q("pl-guest-d"), TODAY).errors.employerName).toBeUndefined()
+  expect(validate({ ...emptyValues(), employment: "employed", employerName: "Ромашка" }, Q("pl-guest-d"), TODAY).errors.employerName).toBe("Анкета заполняется латиницей")
 })
 
 test("validate warns about passport validity", () => {
   const v = { ...emptyValues(), expiryDate: "2026-12-01", departureDate: "2026-11-16", issueDate: "2015-01-01", birthDate: "2030-01-01" }
-  expect(validate(v, TODAY).warnings).toHaveLength(3)
-  expect(validate({ ...v, expiryDate: "2026-01-01" }, TODAY).warnings).toHaveLength(4)
-  expect(validate({ ...v, expiryDate: "2030-01-01", issueDate: "2020-01-01", birthDate: "1990-01-01" }, TODAY).warnings).toHaveLength(0)
+  expect(validate(v, Q("pl-guest-d"), TODAY).warnings).toHaveLength(3)
+  expect(validate(v, Q("pl-guest-d"), TODAY).warnings).toContain("Паспорт должен действовать ещё минимум 3 месяца после выезда из Шенгена.")
+  expect(validate({ ...v, expiryDate: "2026-01-01" }, Q("pl-guest-d"), TODAY).warnings).toHaveLength(4)
+  expect(validate({ ...v, expiryDate: "2030-01-01", issueDate: "2020-01-01", birthDate: "1990-01-01" }, Q("pl-guest-d"), TODAY).warnings).toHaveLength(0)
 })
 
 test("validate flags a date left unfinished or impossible instead of letting the PDF go out without it", () => {
   const v = { ...emptyValues(), expiryDate: "31.02.2020", departureDate: "12.03.20", issueDate: "2015-01-01" }
-  const { errors, warnings } = validate(v, TODAY)
+  const { errors, warnings } = validate(v, Q("pl-guest-d"), TODAY)
   expect(errors.expiryDate).toBe("Проверьте дату: ДД.ММ.ГГГГ")
   expect(errors.departureDate).toBe("Проверьте дату: ДД.ММ.ГГГГ")
   expect(errors.issueDate).toBeUndefined()
@@ -131,5 +134,14 @@ test("validate flags a date left unfinished or impossible instead of letting the
 })
 
 test("validate stops the PDF on an unfinished submission date", () => {
-  expect(validate({ ...emptyValues(), submissionDate: "20.11.20" }, TODAY).errors.submissionDate).toBe("Проверьте дату: ДД.ММ.ГГГГ")
+  expect(validate({ ...emptyValues(), submissionDate: "20.11.20" }, Q("pl-guest-d"), TODAY).errors.submissionDate).toBe("Проверьте дату: ДД.ММ.ГГГГ")
+})
+
+test("a choice the blank cannot tick is an error", () => {
+  expect(validate({ ...emptyValues(), sex: "X" }, Q("pl-guest-d"), TODAY).errors.sex).toBe("Этого варианта нет в бланке")
+})
+
+test("a field the questionnaire lacks is neither checked nor printed", () => {
+  expect(validate({ ...emptyValues(), basis: "Праца" }, Q("pl-guest-d"), TODAY).errors.basis).toBeUndefined()
+  expect(validate({ ...emptyValues(), basis: "Праца" }, Q("pl-work"), TODAY).errors.basis).toBe("Анкета заполняется латиницей")
 })

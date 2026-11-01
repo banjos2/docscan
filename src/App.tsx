@@ -9,12 +9,12 @@ import { emptyValues, type Sources, type Values } from "@/lib/anketa"
 import { heicToJpeg, isHeic } from "@/lib/heic"
 import { extract, MrzNotFoundError } from "@/lib/mrz"
 import { preloadOcr, recognize, turnOver } from "@/lib/ocr"
-import { TEMPLATES, type Template } from "@/lib/template"
+import { applyQuestionnaire, QUESTIONNAIRES, type Questionnaire } from "@/lib/questionnaire"
 import { validate } from "@/lib/validate"
 
 export function App() {
-  const [template, setTemplate] = useState(TEMPLATES[0])
-  const [values, setValues] = useState<Values>(() => emptyValues())
+  const [questionnaire, setQuestionnaire] = useState(QUESTIONNAIRES[0])
+  const [values, setValues] = useState<Values>(() => ({ ...emptyValues(), ...QUESTIONNAIRES[0].presets }))
   const [sources, setSources] = useState<Sources>({})
   const [photo, setPhoto] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
@@ -23,7 +23,7 @@ export function App() {
   const [pdf, setPdf] = useState<string | null>(null)
   const [pdfError, setPdfError] = useState<string | null>(null)
   const [generating, setGenerating] = useState(false)
-  const { errors, warnings } = useMemo(() => validate(values), [values])
+  const { errors, warnings } = useMemo(() => validate(values, questionnaire), [values, questionnaire])
   const hasErrors = Object.keys(errors).length > 0
 
   useEffect(() => preloadOcr(), [])
@@ -98,10 +98,11 @@ export function App() {
     setPdfError(null)
   }
 
-  // The cities belong to the template's country: the old one means nothing on the new blank.
-  function changeTemplate(t: Template) {
-    setTemplate(t)
-    change("submissionCity", "")
+  function changeQuestionnaire(next: Questionnaire) {
+    setValues((v) => applyQuestionnaire(v, questionnaire, next))
+    setQuestionnaire(next)
+    replacePdf(null)
+    setPdfError(null)
   }
 
   async function approve() {
@@ -110,10 +111,10 @@ export function App() {
     if (hasErrors) return
     setGenerating(true)
     try {
-      const { fillAnketa } = await import("@/lib/pdf")
-      const res = await fetch(`${import.meta.env.BASE_URL}${template.pdf}`)
-      if (!res.ok) throw new Error(`Не удалось загрузить шаблон анкеты: ${res.status}`)
-      const bytes = await fillAnketa(await res.arrayBuffer(), values, template)
+      const { fillForm } = await import("@/lib/fill")
+      const res = await fetch(`${import.meta.env.BASE_URL}${questionnaire.blank.file}`)
+      if (!res.ok) throw new Error(`Не удалось загрузить бланк анкеты: ${res.status}`)
+      const bytes = await fillForm(await res.arrayBuffer(), values, questionnaire)
       replacePdf(URL.createObjectURL(new Blob([bytes as BlobPart], { type: "application/pdf" })))
     } catch (e) {
       console.error(e)
@@ -142,9 +143,9 @@ export function App() {
             values={values}
             sources={sources}
             errors={submitted ? errors : {}}
-            template={template}
+            questionnaire={questionnaire}
             onChange={change}
-            onTemplate={changeTemplate}
+            onQuestionnaire={changeQuestionnaire}
           />
           {warnings.length > 0 && (
             <Alert>

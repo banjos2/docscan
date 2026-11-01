@@ -1,55 +1,97 @@
-import { DATE_KEYS, visible, type EmploymentCode, type SchengenCode, type TextKey, type Values } from "./anketa"
+import { DATE_KEYS, realIso, toDmy, visible, type EmploymentCode, type SchengenCode, type TextKey, type Values } from "./anketa"
 import { CITIES } from "./cities"
-import { PRINT_KEYS, type PrintKey, type Template } from "./template"
+import type { Questionnaire } from "./questionnaire"
+
+// What a blank can print. Its own list, not TEXT_KEYS: a cell isn't always one typed field (firstEntry and place come
+// from lists, "date" is the submission date, duration is counted, address, profession, employer, host, org and
+// orgContact are put together from several fields).
+export const PRINT_KEYS = [
+  "surname", "surnameAtBirth", "firstName", "birthDate", "placeOfBirth", "countryOfBirth",
+  "nationality", "nationalityAtBirth", "nationalId", "docNumber", "issueDate", "expiryDate", "issuedBy",
+  "address", "email", "phone", "profession", "employer", "purposeOther", "basis", "destination", "firstEntry", "duration",
+  "prevVisa1From", "prevVisa1To", "prevVisa2From", "prevVisa2To", "prevVisa3From", "prevVisa3To",
+  "prevVisa4From", "prevVisa4To", "prevVisa5From", "prevVisa5To",
+  "arrivalDate", "departureDate", "host", "hostAddress", "hostPhone", "hostEmail",
+  "org", "orgContact", "orgPhone", "orgEmail", "sponsorWho", "workPermit", "place", "date",
+] as const
+
+export type PrintKey = (typeof PRINT_KEYS)[number]
+// What one PDF field gets: a print key, or two of them in one cell ("address+email").
+export type CellSpec = PrintKey | `${PrintKey}+${PrintKey}`
+
+// List choices print in English on every blank.
+export const COUNTRY_EN: Record<SchengenCode, string> = {
+  AT: "AUSTRIA", BE: "BELGIUM", BG: "BULGARIA", HU: "HUNGARY", DE: "GERMANY", GR: "GREECE", DK: "DENMARK",
+  IS: "ICELAND", ES: "SPAIN", IT: "ITALY", LV: "LATVIA", LT: "LITHUANIA", LI: "LIECHTENSTEIN", LU: "LUXEMBOURG",
+  MT: "MALTA", NL: "NETHERLANDS", NO: "NORWAY", PL: "POLAND", PT: "PORTUGAL", RO: "ROMANIA", SK: "SLOVAKIA",
+  SI: "SLOVENIA", FI: "FINLAND", FR: "FRANCE", HR: "CROATIA", CZ: "CZECH REPUBLIC", CH: "SWITZERLAND", SE: "SWEDEN",
+  EE: "ESTONIA",
+}
+
+export const STATUS_EN: Record<EmploymentCode, string> = {
+  employed: "EMPLOYEE",
+  unemployed: "NO OCCUPATION",
+  pupil: "PUPIL",
+  student: "STUDENT",
+  pensioner: "PENSIONER",
+  entrepreneur: "INDIVIDUAL ENTREPRENEUR",
+  selfEmployed: "SELF-EMPLOYED",
+}
 
 export type Address = Record<"country" | "city" | "street" | "house" | "flat" | "postcode", string>
 
 // The non-empty parts, trimmed, with sep between them: a missing part leaves no stray space, comma or dash.
 const join = (sep: string, ...parts: string[]) => parts.map((s) => s.trim()).filter(Boolean).join(sep)
 
-// Item 19 has two lines: "street house-flat" and "postcode city, country".
-export function addressLines(a: Address): [string, string] {
-  return [join(" ", a.street, join("-", a.house, a.flat)), join(", ", join(" ", a.postcode, a.city), a.country)]
+// One line, in the order of the customer's samples: "country, postcode, city, street house-flat".
+export const addressLine = (a: Address) => join(", ", a.country, a.postcode, a.city, join(" ", a.street, join("-", a.house, a.flat)))
+
+// Days of the stay, arrival and departure included; "" unless both are real dates in that order.
+export function stayDays(arrivalIso: string, departureIso: string): string {
+  const [from, to] = [realIso(arrivalIso), realIso(departureIso)]
+  return from && to && from <= to ? String((Date.parse(to) - Date.parse(from)) / 86_400_000 + 1) : ""
 }
 
-// A field the form hides reads as empty, whatever it still holds.
-const shown = (v: Values, k: TextKey) => (visible(k, v) ? v[k] : "")
-
-// The text of one cell, "" for none. List choices are printed as the template names them; a code it has no name for prints nothing.
-function cellText(key: PrintKey, v: Values, t: Template): string {
-  if (key === "firstEntry") return t.schengen[v.firstEntry as SchengenCode] ?? ""
-  if (key === "place") return CITIES[t.country].find((c) => c.id === v.submissionCity)?.print ?? ""
-  if (key === "address1" || key === "address2") {
+// The text of one print key, "" for none. A field the questionnaire hides reads as empty, whatever it still holds.
+function keyText(key: PrintKey, v: Values, q: Questionnaire): string {
+  const shown = (k: keyof Values) => (visible(k, v, q.items) ? (v[k] as string) : "")
+  if (key === "firstEntry") return COUNTRY_EN[shown("firstEntry") as SchengenCode] ?? ""
+  if (key === "place") return CITIES[q.country].find((c) => c.id === shown("submissionCity"))?.print ?? ""
+  if (key === "duration") return stayDays(shown("arrivalDate"), shown("departureDate"))
+  if (key === "address") {
     const p = v.actualDiffers === "yes" ? "actual" : "reg"
-    const lines = addressLines({
-      country: shown(v, `${p}Country`), city: shown(v, `${p}City`), street: shown(v, `${p}Street`),
-      house: shown(v, `${p}House`), flat: shown(v, `${p}Flat`), postcode: shown(v, `${p}Postcode`),
-    })
-    return lines[key === "address1" ? 0 : 1].toUpperCase()
+    return addressLine({
+      country: shown(`${p}Country`), city: shown(`${p}City`), street: shown(`${p}Street`),
+      house: shown(`${p}House`), flat: shown(`${p}Flat`), postcode: shown(`${p}Postcode`),
+    }).toUpperCase()
   }
   // The position if there is one, else the status.
-  if (key === "profession") return shown(v, "position").trim().toUpperCase() || (t.employment[v.employment as EmploymentCode] ?? "")
+  if (key === "profession") return shown("position").trim().toUpperCase() || (STATUS_EN[shown("employment") as EmploymentCode] ?? "")
   // The employer's e-mail is typed in but the blank has no place for it.
-  if (key === "employer")
-    return join(", ", shown(v, "employerName"), shown(v, "employerAddress"), shown(v, "employerPhone")).toUpperCase()
+  if (key === "employer") return join(", ", shown("employerName"), shown("employerAddress"), shown("employerPhone")).toUpperCase()
+  // The "other (specify)" line of the purpose holds the Karta Polaka number.
+  if (key === "purposeOther") return shown("kpNumber").trim() && `KARTA POLAKA ${shown("kpNumber").trim().toUpperCase()}`
   // One line for the name: the hotel, or the person as "surname first name" (only one of the kinds is visible).
-  if (key === "host") return join(" ", shown(v, "hotelName"), shown(v, "hostSurname"), shown(v, "hostFirstName")).toUpperCase()
-  if (key === "org") return join(", ", shown(v, "orgName"), shown(v, "orgAddress")).toUpperCase()
-  if (key === "orgContact") return join(" ", shown(v, "orgContactSurname"), shown(v, "orgContactFirstName")).toUpperCase()
-  if (key === "orgContactEmail") return shown(v, "orgEmail").trim()
-  const field = key === "date" ? "submissionDate" : key
-  const text = shown(v, field).trim()
+  if (key === "host") return join(" ", shown("hotelName"), shown("hostSurname"), shown("hostFirstName")).toUpperCase()
+  if (key === "org") return join(", ", shown("orgName"), shown("orgAddress")).toUpperCase()
+  if (key === "orgContact") return join(" ", shown("orgContactSurname"), shown("orgContactFirstName")).toUpperCase()
+  const field: TextKey = key === "date" ? "submissionDate" : key
+  const text = shown(field).trim()
   if (!text) return ""
-  if (DATE_KEYS.includes(field)) return t.formatDate(text)
-  return key === "email" || key === "hostEmail" ? text : text.toUpperCase()
+  if (DATE_KEYS.includes(field)) return toDmy(text)
+  return field === "email" || field === "hostEmail" || field === "orgEmail" ? text : text.toUpperCase()
 }
 
-// What goes into each cell of the blank: capitals except e-mail, dates as the template writes them, nothing for empty.
-export function printedText(v: Values, t: Template): Partial<Record<PrintKey, string>> {
+// What the blank prints for each key: capitals except e-mail, dates as dd-mm-yyyy, nothing for empty.
+export function printedText(v: Values, q: Questionnaire): Partial<Record<PrintKey, string>> {
   const out: Partial<Record<PrintKey, string>> = {}
   for (const key of PRINT_KEYS) {
-    const text = cellText(key, v, t)
+    const text = keyText(key, v, q)
     if (text) out[key] = text
   }
   return out
 }
+
+// The text of one PDF field: its parts that have text, one per line in a multiline field.
+export const cellText = (spec: CellSpec, printed: Partial<Record<PrintKey, string>>, multiline: boolean) =>
+  spec.split("+").map((k) => printed[k as PrintKey] ?? "").filter(Boolean).join(multiline ? "\n" : ", ")
