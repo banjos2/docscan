@@ -57,6 +57,15 @@ test("a Polish radio group with repeated export values gets exactly the chosen w
   expect(widgets.map((w) => `${w.getOnValue()?.decodeText()}:${w.getAppearanceState()?.decodeText()}`)).toEqual(["0:Off", "1:Off", "2:Off", "3:3", "4:Off", "5:Off"])
 })
 
+test("a one-row box the form marks multiline is filled as one line, a taller one keeps its lines", async () => {
+  const form = (await PDFDocument.load(await fillForm(PL_D_BYTES, SPECIMEN, Q("pl-guest-d")))).getForm()
+  // Item 31's address box, 22.5 pt high: room for one line.
+  expect(form.getTextField("Text36").getText()).toBe("CALLE MAYOR 1, 28013 MADRID, SPAIN, Reservas@Ejemplo.example")
+  expect(form.getTextField("Text7").isMultiline()).toBe(false)
+  // Item 32's contact box, 33 pt high.
+  expect(form.getTextField("Text39").getText()).toBe("PEREZ JUAN\nJuan.Perez@acme.example")
+})
+
 test("fillForm rejects text that Helvetica cannot encode", async () => {
   await expect(fillForm(PL_D_BYTES, { ...SPECIMEN, placeOfBirth: "Минск" }, Q("pl-guest-d"))).rejects.toThrow()
 })

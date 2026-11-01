@@ -29,16 +29,22 @@ export async function fillForm(bytes: ArrayBuffer | Uint8Array, v: Values, q: Qu
 
   for (const [name, spec] of Object.entries(q.blank.text)) {
     const field = form.getTextField(name)
+    const widgets = field.acroField.getWidgets()
+    const box = widgets[0].getRectangle()
+    const formSize = daSize(widgets[0].getDefaultAppearance() ?? field.acroField.getDefaultAppearance())
+    // The Polish form marks its one-row boxes multiline too. Preview sets a multiline field's first line low and cuts it
+    // off in such a box (any size over ~5 pt in an 11 pt row); as a single line it is centred and fitted like the others.
+    // ponytail: 2.6 × size is two lines at 1.2 leading plus a descender, as Preview lays them out; retune if a new form's
+    // two-line boxes come out single.
+    if (field.isMultiline() && box.height < 2.6 * (formSize > 0 ? formSize : 10)) field.disableMultiline()
     const text = cellText(spec, printed, field.isMultiline())
     field.setText(text)
     if (!text) continue
     // A size of our own in the DA: the forms' automatic size grows the text with the box (36–49 pt in the Polish ones).
     // pdf-lib reads a widget's DA before the field's, so a widget that has one gets it too.
-    const widgets = field.acroField.getWidgets()
-    const formSize = daSize(widgets[0].getDefaultAppearance() ?? field.acroField.getDefaultAppearance())
     const size = field.isMultiline()
       ? formSize > 0 ? formSize : 10
-      : fitFontSize(helvetica.widthOfTextAtSize(text, 1), widgets[0].getRectangle(), formSize)
+      : fitFontSize(helvetica.widthOfTextAtSize(text, 1), box, formSize)
     const setDa = () => {
       const da = `/Helv ${size} Tf 0 g`
       field.acroField.setDefaultAppearance(da)
