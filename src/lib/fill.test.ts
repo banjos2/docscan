@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from "node:fs"
 import { basename } from "node:path"
-import { PDFAcroRadioButton, PDFDocument, PDFName, type PDFForm } from "pdf-lib"
+import { layoutMultilineText, PDFAcroRadioButton, PDFDocument, PDFName, StandardFonts, TextAlignment, type PDFForm } from "pdf-lib"
 import { expect, test } from "vitest"
 import { fillForm, fitFontSize } from "./fill"
 import { cellText, printedText } from "./print"
@@ -64,6 +64,27 @@ test("a one-row box the form marks multiline is filled as one line, a taller one
   expect(form.getTextField("Text7").isMultiline()).toBe(false)
   // Item 32's contact box, 33 pt high.
   expect(form.getTextField("Text39").getText()).toBe("PEREZ JUAN\nJuan.Perez@acme.example")
+})
+
+// Preview lays a multiline field out itself, from /V and /DA (measured on the Polish form): in the box inset 3 pt on
+// each side, a line pitch of up to 1.25 × size, and a line that doesn't fit whole is left out.
+test("a long value in a multiline box shrinks until Preview shows all its lines", async () => {
+  const v = {
+    ...SPECIMEN, regStreet: "Grosse Friedrichsburger Strasse", regHouse: "117", regFlat: "45", email: "erika.mustermann.1964@example.com",
+    orgName: "Przedsiebiorstwo Produkcyjno-Uslugowe Budmex Sp. z o.o.", orgAddress: "ul. Przemyslowa 12, 62-800 Kalisz, Poland",
+  }
+  const out = await PDFDocument.load(await fillForm(PL_D_BYTES, v, Q("pl-work")))
+  const font = await out.embedFont(StandardFonts.Helvetica)
+  // Item 17's address and e-mail, 250.7 × 36.6 pt, and item 32's organization, 241.5 × 30.5 pt: three lines each at 10 pt.
+  for (const name of ["Text16", "Text37"]) {
+    const field = out.getForm().getTextField(name)
+    const { width, height } = field.acroField.getWidgets()[0].getRectangle()
+    const size = Number(/(\d*\.?\d+) Tf/.exec(field.acroField.getDefaultAppearance() ?? "")?.[1])
+    const bounds = { x: 3, y: 3, width: width - 6, height: height - 6 }
+    const { lines } = layoutMultilineText(field.getText() ?? "", { alignment: TextAlignment.Left, fontSize: size, font, bounds })
+    expect(size, name).toBeLessThan(10)
+    expect(lines.length * 1.25 * size, name).toBeLessThanOrEqual(bounds.height)
+  }
 })
 
 test("fillForm rejects text that Helvetica cannot encode", async () => {
