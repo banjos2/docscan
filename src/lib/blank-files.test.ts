@@ -33,6 +33,13 @@ for (const file of readdirSync(DIR).filter((f) => f.endsWith(".pdf"))) {
       for (const d of [f.acroField.dict, ...f.acroField.getWidgets().map((w) => w.dict)]) expect(daSize(d)).toBeLessThanOrEqual(14)
     }
   })
+
+  // The filler writes "/Helv … Tf" into a field's DA; a viewer redrawing the field finds that font in the form's /DR.
+  test(`${file} has Helvetica as /Helv in its form resources`, async () => {
+    const doc = await PDFDocument.load(readFileSync(new URL(file, DIR)), { updateMetadata: false })
+    const dr = doc.getForm().acroForm.dict.lookup(PDFName.of("DR"), PDFDict)
+    expect(dr.lookup(PDFName.of("Font"), PDFDict).has(PDFName.of("Helv"))).toBe(true)
+  })
 }
 
 test("the blanks folder holds the customer's two PDF forms", () => {
