@@ -1,5 +1,6 @@
 import type { Item, Items, Values } from "./anketa"
 import { BG } from "./blanks/bg"
+import plC from "./blanks/pl-c.fields"
 import { PL_D } from "./blanks/pl-d"
 import { CITIES, type CountryCode } from "./cities"
 import type { CellSpec } from "./print"
@@ -25,7 +26,18 @@ export const NUMBERING_D: Items = {
   fingerprints: 27, arrival: 29, departure: 30, host: 31, org: 32, costs: 33, submission: 37,
 }
 
+// A form made from Word names its fields after what they print: a text field by its CellSpec, a checkbox by its tick key.
+export const fromFields = (file: string, fields: { text: readonly string[]; boxes: readonly string[] }): Blank => ({
+  file,
+  text: Object.fromEntries(fields.text.map((name) => [name, name as CellSpec])),
+  ticks: Object.fromEntries(fields.boxes.map((name) => [name, name])),
+})
+
+const PL_C = fromFields("blanks/pl-c.pdf", plC)
+
 export const QUESTIONNAIRES: Questionnaire[] = [
+  { id: "pl-s", label: "Польша С", country: "PL", blank: PL_C, items: NUMBERING_B, presets: { purpose: "tourism", hostKind: "hotel" } },
+  { id: "pl-guest-s", label: "Польша гости С", country: "PL", blank: PL_C, items: NUMBERING_B, presets: { purpose: "tourism", hostKind: "person" } },
   { id: "pl-guest-d", label: "Польша гости Д", country: "PL", blank: PL_D, items: NUMBERING_D, presets: { purpose: "family", hostKind: "person" } },
   { id: "pl-kp", label: "Польша КП", country: "PL", blank: PL_D, items: { ...NUMBERING_D, kpNumber: 21 }, presets: { purpose: "other", hostKind: "person" } },
   { id: "pl-work", label: "Польша рабочая", country: "PL", blank: PL_D, items: { ...NUMBERING_D, basis: 21, workPermit: 34 }, presets: { purpose: "other", basis: "PRACA" } },
@@ -54,10 +66,3 @@ export function itemsNote(numbers: number[]): string {
 // The options of a choice that the blank has a box for.
 export const offered = <T extends Record<string, string>>(blank: Blank, group: string, options: T): Partial<T> =>
   Object.fromEntries(Object.entries(options).filter(([k]) => `${group}.${k}` in blank.ticks)) as Partial<T>
-
-// A form made from Word names its fields after what they print: a text field by its CellSpec, a checkbox by its tick key.
-export const fromFields = (file: string, fields: { text: readonly string[]; boxes: readonly string[] }): Blank => ({
-  file,
-  text: Object.fromEntries(fields.text.map((name) => [name, name as CellSpec])),
-  ticks: Object.fromEntries(fields.boxes.map((name) => [name, name])),
-})
