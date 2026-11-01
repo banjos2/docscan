@@ -1,4 +1,5 @@
 import type { Items, Values } from "./anketa"
+import { BG } from "./blanks/bg"
 import { PL_D } from "./blanks/pl-d"
 import { CITIES, type CountryCode } from "./cities"
 import type { CellSpec } from "./print"
@@ -28,6 +29,7 @@ export const QUESTIONNAIRES: Questionnaire[] = [
   { id: "pl-guest-d", label: "Польша гости Д", country: "PL", blank: PL_D, items: NUMBERING_D, presets: { purpose: "family", hostKind: "person" } },
   { id: "pl-kp", label: "Польша КП", country: "PL", blank: PL_D, items: { ...NUMBERING_D, kpNumber: 21 }, presets: { purpose: "other", hostKind: "person" } },
   { id: "pl-work", label: "Польша рабочая", country: "PL", blank: PL_D, items: { ...NUMBERING_D, basis: 21, workPermit: 34 }, presets: { purpose: "other", basis: "PRACA" } },
+  { id: "bg", label: "Болгария", country: "BG", blank: BG, items: NUMBERING_B, presets: { purpose: "tourism", hostKind: "hotel" } },
 ]
 
 // The new questionnaire's presets over the data. The city goes only when the list of cities changes with the country.
