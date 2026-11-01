@@ -15,12 +15,13 @@ for (const f of form.getFields()) {
   if (f instanceof PDFTextField) {
     f.setText(undefined)
     f.acroField.dict.delete(PDFName.of("RV"))
+    // The appearance holds the typed text. No new one is drawn: pdf-lib would write its auto-size into the DA.
+    for (const w of f.acroField.getWidgets()) w.dict.delete(PDFName.of("AP"))
   } else if (f instanceof PDFCheckBox || f instanceof PDFRadioGroup) {
     f.acroField.setValue(PDFName.of("Off")) // /V and /AS of every widget
   }
 }
 
-form.updateFieldAppearances() // new empty appearances now, so the GC below also drops the old ones
 for (const k of ["XFA", "NeedsRendering"]) form.acroForm.dict.delete(PDFName.of(k))
 for (const k of ["NeedsRendering", "Metadata", "PieceInfo"]) catalog.delete(PDFName.of(k)) // PieceInfo: the editor's save stamp
 context.trailerInfo.Info = undefined
@@ -34,7 +35,7 @@ for (const page of doc.getPages()) {
   }
 }
 
-// Old field appearances, replaced strings, earlier revisions: drop every object the catalog cannot reach.
+// The old appearances, replaced strings, earlier revisions: drop every object the catalog cannot reach.
 const reachable = new Set()
 const walk = (o) => {
   if (o instanceof PDFRef) {
@@ -48,5 +49,6 @@ const walk = (o) => {
 walk(context.trailerInfo.Root)
 for (const [ref] of context.enumerateIndirectObjects()) if (!reachable.has(ref.tag)) context.delete(ref)
 
+// updateFieldAppearances: false, or pdf-lib redraws every widget left without an appearance and rewrites its DA
 writeFileSync(dst, await doc.save({ updateFieldAppearances: false }))
 console.log(`${form.getFields().length} fields`)
