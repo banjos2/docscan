@@ -138,6 +138,19 @@ const SECTIONS: { title: string; description: string; fromDoc?: boolean; fields:
   },
 ]
 
+// Several fields of one blank item read "19.1.", "19.2." … instead of repeating "19.", numbered over the fields shown.
+function subNumbered(fields: Field[], v: Values): Field[] {
+  const labels = fields.map((f) => (typeof f.label === "function" ? f.label(v) : f.label))
+  const item = (label: string) => /^(\d+)\. /.exec(label)?.[1]
+  const seen: Record<string, number> = {}
+  return fields.map((f, i) => {
+    const n = item(labels[i])
+    if (!n || labels.filter((l) => item(l) === n).length < 2) return f
+    seen[n] = (seen[n] ?? 0) + 1
+    return { ...f, label: labels[i].replace(`${n}. `, `${n}.${seen[n]}. `) }
+  })
+}
+
 type Props = {
   values: Values
   sources: Sources
@@ -179,9 +192,7 @@ export function AnketaForm({ values, sources, errors, template, onChange, onTemp
             <CardDescription>{s.description}</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-x-4 gap-y-5 sm:grid-cols-2">
-            {s.fields
-              .filter((f) => visible(f.key, values))
-              .map((f) => (
+            {subNumbered(s.fields.filter((f) => visible(f.key, values)), values).map((f) => (
                 <FieldRow
                   key={f.key}
                   field={f}
