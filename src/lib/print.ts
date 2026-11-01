@@ -70,7 +70,10 @@ function keyText(key: PrintKey, v: Values, q: Questionnaire): string {
   // The employer's e-mail is typed in but the blank has no place for it.
   if (key === "employer") return join(", ", shown("employerName"), shown("employerAddress"), shown("employerPhone")).toUpperCase()
   // The "other (specify)" line of the purpose holds the Karta Polaka number.
-  if (key === "purposeOther") return shown("kpNumber").trim() && `KARTA POLAKA ${shown("kpNumber").trim().toUpperCase()}`
+  if (key === "purposeOther") {
+    const kp = shown("kpNumber").trim().toUpperCase()
+    return kp && `KARTA POLAKA ${kp}`
+  }
   // One line for the name: the hotel, or the person as "surname first name" (only one of the kinds is visible).
   if (key === "host") return join(" ", shown("hotelName"), shown("hostSurname"), shown("hostFirstName")).toUpperCase()
   if (key === "org") return join(", ", shown("orgName"), shown("orgAddress")).toUpperCase()
