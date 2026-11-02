@@ -131,7 +131,7 @@ export function App() {
         <h1 className="font-display text-3xl font-bold tracking-tight uppercase">DocScan</h1>
         <p className="max-w-prose text-muted-foreground">
           Загрузите фото паспорта или ID-карты: данные из MRZ попадут в анкету. Проверьте их, дополните и скачайте готовый
-          PDF. Фото обрабатывается в браузере и никуда не отправляется.
+          PDF.
         </p>
       </header>
       <main className="grid items-start gap-8 lg:grid-cols-2">
