@@ -259,7 +259,8 @@ function ChoiceSelect({
   onChange: (value: string) => void
 }) {
   return (
-    <Select value={value} onValueChange={onChange}>
+    // A value kept from another questionnaire that this one doesn't offer shows as unchosen; validate still reports it.
+    <Select value={value in options ? value : ""} onValueChange={onChange}>
       <SelectTrigger id={id} className="w-full" aria-invalid={invalid} aria-describedby={describedBy}>
         <SelectValue placeholder="Выберите" />
       </SelectTrigger>

@@ -20,3 +20,9 @@ test("a field its blank has no line for says it doesn't print: only Болгар
     expect(notes, q.id).toEqual(q.id === "bg" ? [`sponsorWho: ${NO_LINE}`] : [])
   }
 })
+
+test("a choice kept from another questionnaire that this blank can't tick shows «Выберите», not an empty select", () => {
+  // Польша гости Д has no box for sex "X" (Болгария has); validate still stops the PDF on it.
+  const trigger = /<button[^>]*id="field-sex"[^>]*>(.*?)<\/button>/.exec(render({ ...SPECIMEN, sex: "X" }, "pl-guest-d"))?.[1] ?? ""
+  expect(trigger).toContain("Выберите")
+})
