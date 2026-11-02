@@ -3,6 +3,7 @@ import { BG } from "./blanks/bg"
 import es from "./blanks/es.fields"
 import gr from "./blanks/gr.fields"
 import hu from "./blanks/hu.fields"
+import it from "./blanks/it.fields"
 import plC from "./blanks/pl-c.fields"
 import { PL_D } from "./blanks/pl-d"
 import { CITIES, type CountryCode } from "./cities"
@@ -48,6 +49,7 @@ export const QUESTIONNAIRES: Questionnaire[] = [
   { id: "hu", label: "Венгрия тур", country: "HU", blank: fromFields("blanks/hu.pdf", hu), items: NUMBERING_A, presets: { purpose: "tourism", hostKind: "hotel" } },
   { id: "gr", label: "Греция тур", country: "GR", blank: fromFields("blanks/gr.pdf", gr), items: NUMBERING_B, presets: { purpose: "tourism", hostKind: "hotel" } },
   { id: "es", label: "Испания", country: "ES", blank: fromFields("blanks/es.pdf", es), items: NUMBERING_A, presets: { purpose: "tourism", hostKind: "hotel" } },
+  { id: "it", label: "Италия", country: "IT", blank: fromFields("blanks/it.pdf", it), items: NUMBERING_A, presets: { purpose: "tourism", hostKind: "hotel" } },
 ]
 
 // The new questionnaire's presets over the data. The city goes only when the list of cities changes with the country.
