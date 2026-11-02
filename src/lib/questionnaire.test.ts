@@ -15,11 +15,28 @@ const isTickKey = (key: string) => {
   return b === undefined && a in ((OPTIONS as Record<string, Record<string, string>>)[group] ?? {})
 }
 
-test("item numbers come from the blank's family", () => {
-  expect([NUMBERING_D.address, NUMBERING_A.arrival, NUMBERING_B.arrival, NUMBERING_B.fingerprints, NUMBERING_D.submission]).toEqual([17, 28, null, 28, 37])
-  expect(Q("pl-kp").items.kpNumber).toBe(21)
-  expect([Q("pl-work").items.basis, Q("pl-work").items.workPermit]).toEqual([21, 34])
-  expect(Q("pl-guest-d").items).not.toHaveProperty("destination")
+test("the ten questionnaires: order, country, item numbers and presets as the spec's tables give them", () => {
+  // «Номера пунктов»: blanks A, B and D (D has no destination: the blank prints «ПОЛЬША»).
+  const A = { address: 19, residence: 20, occupation: 21, employer: 22, purpose: 23, destination: 25, firstEntry: 26, entries: 27,
+    arrival: 28, departure: 28, fingerprints: 29, host: 31, org: 32, costs: 33, submission: null }
+  const B = { ...A, arrival: null, departure: null, fingerprints: 28, host: 30, org: 31, costs: 32 }
+  const D = { address: 17, residence: 18, occupation: 19, employer: 20, purpose: 21, firstEntry: 23, entries: 24, prevVisas: 26,
+    fingerprints: 27, arrival: 29, departure: 30, host: 31, org: 32, costs: 33, submission: 37 }
+  expect([NUMBERING_A, NUMBERING_B, NUMBERING_D]).toEqual([A, B, D])
+  // «Анкеты и бланки» and «Предустановки».
+  const tour = { purpose: "tourism", hostKind: "hotel" }
+  expect(QUESTIONNAIRES.map((q) => [q.id, q.country, q.items, q.presets])).toEqual([
+    ["pl-s", "PL", B, tour],
+    ["pl-guest-s", "PL", B, { purpose: "tourism", hostKind: "person" }],
+    ["pl-guest-d", "PL", D, { purpose: "family", hostKind: "person" }],
+    ["pl-kp", "PL", { ...D, kpNumber: 21 }, { purpose: "other", hostKind: "person" }],
+    ["pl-work", "PL", { ...D, basis: 21, workPermit: 34 }, { purpose: "other", basis: "PRACA" }],
+    ["bg", "BG", B, tour],
+    ["hu", "HU", A, tour],
+    ["gr", "GR", B, tour],
+    ["es", "ES", A, tour],
+    ["it", "IT", A, tour],
+  ])
 })
 
 test("a label takes its number from the blank and has none where the blank prints none", () => {
