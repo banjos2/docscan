@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync } from "node:fs"
 import { basename } from "node:path"
 import { PDFAcroRadioButton, PDFDocument, PDFName, StandardFonts, type PDFFont, type PDFForm } from "pdf-lib"
 import { expect, test } from "vitest"
-import { fillForm, fitFontSize, previewLines } from "./fill"
+import { fillForm, fitFontSize, previewLines, unkernedWidth } from "./fill"
 import { cellText, printedText } from "./print"
 import { QUESTIONNAIRES, type Tick } from "./questionnaire"
 import { SPECIMEN } from "./specimen"
@@ -138,6 +138,20 @@ test("a long value in a multiline box shrinks until Preview shows all its lines"
     // and one size up it would not: the size is the largest that fits
     expect(previewFits(field.getText() ?? "", widget.getRectangle(), size + 1, font), name).toBe(false)
   }
+})
+
+test("a long one-line value fits its box as drawn, without the AFM's kerning", async () => {
+  const q = Q("pl-s")
+  // Made up, full of the pairs the AFM kerns: AV, WA, TA, Y.
+  const v = { ...SPECIMEN, hostAddress: "AVATAR WAY 7, TAVAWAY. VAT AVENUE 9, WAWAYA TOWN", hostEmail: "" }
+  const out = await PDFDocument.load(await fillForm(read(q.blank.file), v, q))
+  const field = out.getForm().getTextField("hostAddress+hostEmail")
+  const [widget] = field.acroField.getWidgets()
+  const size = Number(/(\d*\.?\d+) Tf/.exec(widget.getDefaultAppearance() ?? "")?.[1])
+  expect(field.isMultiline()).toBe(false)
+  expect(field.getText()).toBe(v.hostAddress)
+  // pdf-lib draws it with Tj inside a clip 1 pt in from each side.
+  expect(unkernedWidth(v.hostAddress, size, await out.embedFont(StandardFonts.Helvetica))).toBeLessThanOrEqual(widget.getRectangle().width - 2)
 })
 
 test("fillForm rejects text that Helvetica cannot encode", async () => {

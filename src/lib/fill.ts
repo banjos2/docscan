@@ -9,6 +9,11 @@ export const fitFontSize = (widthAt1pt: number, box: { width: number; height: nu
   // A value too long even at 4 pt runs past the box: the field stays editable and the specialist shortens it.
   Math.max(4, Math.min(formSize > 0 ? formSize : 10, (box.width - 4) / widthAt1pt, box.height * 0.75))
 
+// The width a text is drawn with: pdf-lib's widthOfTextAtSize subtracts the AFM's kerning pairs, but an appearance
+// stream's Tj advances by the plain glyph widths, and PDFKit lays text out with lighter kerning than the AFM's.
+export const unkernedWidth = (text: string, size: number, font: PDFFont) =>
+  [...text].reduce((sum, c) => sum + font.widthOfTextAtSize(c, size), 0)
+
 // The lines Preview (PDFKit) wraps a multiline field's text into, at most: it breaks after spaces, after a "-" or "/"
 // that no digit or space follows, and through a word wider than the line, but never before / , ; . : ! ? ) ] }, even
 // after a space (Unicode line breaking, UAX #14 rule LB13), 3 pt in from each side, measuring with macOS
@@ -18,7 +23,7 @@ export const fitFontSize = (widthAt1pt: number, box: { width: number; height: nu
 // re-measure if a viewer cuts lines off.
 export function previewLines(text: string, boxWidth: number, size: number, font: PDFFont): number {
   const width = boxWidth - 7
-  const w = (s: string) => [...s.trimEnd()].reduce((sum, c) => sum + font.widthOfTextAtSize(c, size), 0)
+  const w = (s: string) => unkernedWidth(s.trimEnd(), size, font)
   let n = 0
   for (const para of text.split("\n")) {
     n++
@@ -92,7 +97,7 @@ export async function fillForm(bytes: ArrayBuffer | Uint8Array, v: Values, q: Qu
     // forms make-form builds, is drawn at 12 pt), and pdf-lib reads a widget's DA before the field's.
     const size = field.isMultiline()
       ? multilineSize(text, widgets[0], formSize > 0 ? formSize : 10, helvetica)
-      : fitFontSize(helvetica.widthOfTextAtSize(text, 1), box, formSize)
+      : fitFontSize(unkernedWidth(text, 1, helvetica), box, formSize)
     const setDa = () => {
       const da = `/Helv ${size} Tf 0 g`
       field.acroField.setDefaultAppearance(da)
