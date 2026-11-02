@@ -1,7 +1,7 @@
 // Turns a filled PDF form into a blank: empty fields, no document metadata, no objects left over from earlier edits.
 // node scripts/blanks/clean-pdf.mjs <in.pdf> <out.pdf>
 import { readFileSync, writeFileSync } from "node:fs"
-import { PDFArray, PDFCheckBox, PDFDict, PDFDocument, PDFName, PDFRadioGroup, PDFRef, PDFStream, PDFTextField } from "pdf-lib"
+import { PDFArray, PDFButton, PDFCheckBox, PDFDict, PDFDocument, PDFName, PDFRadioGroup, PDFRef, PDFStream, PDFTextField } from "pdf-lib"
 
 const [src, dst] = process.argv.slice(2)
 if (!src || !dst) throw new Error("usage: node scripts/blanks/clean-pdf.mjs <in.pdf> <out.pdf>")
@@ -19,6 +19,9 @@ for (const f of form.getFields()) {
     for (const w of f.acroField.getWidgets()) w.dict.delete(PDFName.of("AP"))
   } else if (f instanceof PDFCheckBox || f instanceof PDFRadioGroup) {
     f.acroField.setValue(PDFName.of("Off")) // /V and /AS of every widget
+  } else if (!(f instanceof PDFButton)) {
+    // A dropdown, list or signature would keep the client's choice or signature: teach this script to clear it first.
+    throw new Error(`${src}: ${f.getName()}: ${f.constructor.name} is not cleaned`)
   }
 }
 
