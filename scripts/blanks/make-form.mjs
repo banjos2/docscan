@@ -67,8 +67,11 @@ try {
       const top = m.y + 0.75 * m.size
       text.push({ name, page: m.page, x: m.x - push(m), y: top - Number(h), width: Number(w), height: Number(h) })
     } else if (/^[^:\s]+$/.test(m.text)) {
-      // Its box: the nearest one to its left on its line, not more than a box's width away.
-      const k = A.boxes.reduce((best, x, i) => (sameLine(x, m) && x.x < m.x && (best < 0 || x.x > A.boxes[best].x) ? i : best), -1)
+      // Its box: the nearest one to its left whose glyph reaches into the marker's line (a quarter of its size below the
+      // baseline to three quarters above), not more than a box's width away. A box may sit raised or lowered (w:position,
+      // a list bullet's own font) while the marker, which drops its position, stays on the baseline.
+      const onLine = (x) => x.page === m.page && x.y < m.y + 0.75 * m.size && x.y + x.h > m.y - 0.25 * m.size
+      const k = A.boxes.reduce((best, x, i) => (onLine(x) && x.x < m.x && (best < 0 || x.x > A.boxes[best].x) ? i : best), -1)
       if (k < 0 || m.x - (A.boxes[k].x + A.boxes[k].w) > A.boxes[k].w) fail(`{{${m.text}}} has no box right before it`)
       const other = boxes.find((x) => x.k === k)
       if (other) fail(`{{${m.text}}} and {{${other.name}}} on one box`)
