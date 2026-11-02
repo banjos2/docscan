@@ -1,8 +1,8 @@
 import { readFileSync, writeFileSync } from "node:fs"
 import { basename } from "node:path"
-import { layoutMultilineText, PDFAcroRadioButton, PDFDocument, PDFName, StandardFonts, TextAlignment, type PDFForm } from "pdf-lib"
+import { PDFAcroRadioButton, PDFDocument, PDFName, StandardFonts, type PDFFont, type PDFForm } from "pdf-lib"
 import { expect, test } from "vitest"
-import { fillForm, fitFontSize } from "./fill"
+import { fillForm, fitFontSize, previewLines } from "./fill"
 import { cellText, printedText } from "./print"
 import { QUESTIONNAIRES, type Tick } from "./questionnaire"
 import { SPECIMEN } from "./specimen"
@@ -44,8 +44,12 @@ for (const q of QUESTIONNAIRES.filter((q, i) => QUESTIONNAIRES.findIndex((p) => 
     for (const [name, spec] of Object.entries(blank.text)) {
       const field = form.getTextField(name)
       expect(field.getText() ?? "", name).toBe(cellText(spec, printed, field.isMultiline()))
-      // A size of its own, never the form's automatic 0, in the font the form's resources name.
-      if (field.getText()) expect(field.acroField.getDefaultAppearance(), name).toMatch(/^\/Helv (?!0 )\d*\.?\d+ Tf 0 g$/)
+      // A size of its own, never the form's automatic 0, in the font the form's resources name; on every widget too,
+      // since Preview reads only the widget's own DA.
+      if (field.getText()) {
+        expect(field.acroField.getDefaultAppearance(), name).toMatch(/^\/Helv (?!0 )\d*\.?\d+ Tf 0 g$/)
+        for (const w of field.acroField.getWidgets()) expect(w.getDefaultAppearance(), name).toBe(field.acroField.getDefaultAppearance())
+      }
     }
     expect(form.getFields().length).toBe(before.getForm().getFields().length)
   })
@@ -66,8 +70,55 @@ test("a one-row box the form marks multiline is filled as one line, a taller one
   expect(form.getTextField("Text39").getText()).toBe("PEREZ JUAN\nJuan.Perez@acme.example")
 })
 
-// Preview lays a multiline field out itself, from /V and /DA (measured on the Polish form): in the box inset 3 pt on
-// each side, a line pitch of up to 1.25 × size, and a line that doesn't fit whole is left out.
+// Preview (PDFKit) lays a multiline field out itself, from /V and the widget's own /DA (without one it draws 12 pt):
+// lines round(1.2 × size) apart, 3 pt in from the top and bottom, and a line that doesn't fit whole is left out.
+// Measured in scripts/render-pdf-page.js renders at 4–14 pt.
+const previewFits = (text: string, box: { width: number; height: number }, size: number, font: PDFFont) =>
+  previewLines(text, box.width, size, font) * Math.round(1.2 * size) <= box.height - 6
+
+test("lines are counted as Preview wraps them: after hyphens and through a word wider than the line", async () => {
+  const font = await (await PDFDocument.create()).embedFont(StandardFonts.Helvetica)
+  // Line counts PDFKit drew at 10 pt in boxes 92 and 143 pt wide; pdf-lib's own layout makes each one line.
+  expect(previewLines("PRZEDSIEBIORSTWOPRODUKCYJNOHANDLOWEBUDMEX SP. Z O.O.", 92, 10, font)).toBe(5)
+  expect(previewLines("KOWALSKA-NOWAKOWSKA-WISNIEWSKA DOROTA, UL. FABRYCZNA/POLNA 7-9", 143, 10, font)).toBe(4)
+})
+
+test("item 31's contact with a hyphenated e-mail goes down to the size at which Preview shows all its lines", async () => {
+  const q = Q("pl-guest-s")
+  const v = { ...SPECIMEN, orgContactSurname: "Wisniewska-Kowalczyk", orgContactFirstName: "Aleksandra", orgEmail: "aleksandra.wisniewska-kowalczyk@budmex-kalisz.example" }
+  const out = await PDFDocument.load(await fillForm(read(q.blank.file), v, q))
+  const field = out.getForm().getTextField("orgContact+orgEmail")
+  const [widget] = field.acroField.getWidgets()
+  expect(field.getText()).toBe("WISNIEWSKA-KOWALCZYK ALEKSANDRA\naleksandra.wisniewska-kowalczyk@budmex-kalisz.example")
+  // Preview breaks the e-mail after its hyphen: three lines, 3 × 8 + 6 = 30 pt at 7 pt; at 8, 3 × 10 + 6 = 36.
+  expect(widget.getDefaultAppearance()).toBe("/Helv 7 Tf 0 g")
+})
+
+test("item 31's two-line contact on the Polish Word form shows both lines in Preview", async () => {
+  const q = Q("pl-guest-s")
+  const out = await PDFDocument.load(await fillForm(read(q.blank.file), SPECIMEN, q))
+  const field = out.getForm().getTextField("orgContact+orgEmail")
+  const [widget] = field.acroField.getWidgets()
+  expect(field.getText()).toBe("PEREZ JUAN\nJuan.Perez@acme.example")
+  expect(widget.getRectangle()).toMatchObject({ width: 189, height: 33 })
+  // 2 × 12 + 6 = 30 pt at 10 pt; at the 12 pt Preview takes for a widget without a DA, 2 × 14 + 6 = 34.
+  expect(widget.getDefaultAppearance()).toBe("/Helv 10 Tf 0 g")
+  expect(previewFits(field.getText() ?? "", widget.getRectangle(), 10, await out.embedFont(StandardFonts.Helvetica))).toBe(true)
+})
+
+test("a line Preview would wrap goes a size down", async () => {
+  const q = Q("pl-s")
+  // In item 19's 373 × 26 box PDFKit wraps it at 10 pt and leaves the second line out (pdf-lib's kerned widths make it
+  // 366.5 pt, one line); at 9 pt it shows whole.
+  const v = { ...SPECIMEN, employerName: "Poltrans Sp. z o.o.", employerAddress: "ul. Fabryczna 123, 62-800 Kalisz", employerPhone: "+48 62 555 01 123" }
+  const out = await PDFDocument.load(await fillForm(read(q.blank.file), v, q))
+  const field = out.getForm().getTextField("employer")
+  const [widget] = field.acroField.getWidgets()
+  expect(field.getText()).toBe("POLTRANS SP. Z O.O., UL. FABRYCZNA 123, 62-800 KALISZ, +48 62 555 01 123")
+  expect(widget.getDefaultAppearance()).toBe("/Helv 9 Tf 0 g")
+  expect(previewFits(field.getText() ?? "", widget.getRectangle(), 9, await out.embedFont(StandardFonts.Helvetica))).toBe(true)
+})
+
 test("a long value in a multiline box shrinks until Preview shows all its lines", async () => {
   const v = {
     ...SPECIMEN, regStreet: "Grosse Friedrichsburger Strasse", regHouse: "117", regFlat: "45", email: "erika.mustermann.1964@example.com",
@@ -78,12 +129,12 @@ test("a long value in a multiline box shrinks until Preview shows all its lines"
   // Item 17's address and e-mail, 250.7 × 36.6 pt, and item 32's organization, 241.5 × 30.5 pt: three lines each at 10 pt.
   for (const name of ["Text16", "Text37"]) {
     const field = out.getForm().getTextField(name)
-    const { width, height } = field.acroField.getWidgets()[0].getRectangle()
-    const size = Number(/(\d*\.?\d+) Tf/.exec(field.acroField.getDefaultAppearance() ?? "")?.[1])
-    const bounds = { x: 3, y: 3, width: width - 6, height: height - 6 }
-    const { lines } = layoutMultilineText(field.getText() ?? "", { alignment: TextAlignment.Left, fontSize: size, font, bounds })
+    const [widget] = field.acroField.getWidgets()
+    const size = Number(/(\d*\.?\d+) Tf/.exec(widget.getDefaultAppearance() ?? "")?.[1])
     expect(size, name).toBeLessThan(10)
-    expect(lines.length * 1.25 * size, name).toBeLessThanOrEqual(bounds.height)
+    expect(previewFits(field.getText() ?? "", widget.getRectangle(), size, font), name).toBe(true)
+    // and one size up it would not: the size is the largest that fits
+    expect(previewFits(field.getText() ?? "", widget.getRectangle(), size + 1, font), name).toBe(false)
   }
 })
 

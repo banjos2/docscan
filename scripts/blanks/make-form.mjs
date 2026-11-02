@@ -23,27 +23,42 @@ try {
   // A: markers in tiny type, so their places can be read; B: the same pages with the markers' text gone.
   const [a, b] = [join(tmp, "a.docx"), join(tmp, "b.docx")]
   const docx = fileURLToPath(new URL("docx.py", import.meta.url))
-  const word = /word pages (\d+)/.exec(execFileSync("python3", ["-I", docx, "passes", src, a, b], { encoding: "utf8" }))?.[1]
+  const said = execFileSync("python3", ["-I", docx, "passes", src, a, b], { encoding: "utf8" })
+  const word = Number(/^word pages (\d+)$/m.exec(said)?.[1])
+  const written = JSON.parse(/^markers (.*)$/m.exec(said)?.[1] ?? "null")
+  if (!word || !written) fail(`docx.py passes said: ${said}`)
   // A profile of its own: a LibreOffice already open would otherwise take the job over.
   const profile = `-env:UserInstallation=${pathToFileURL(join(tmp, "profile"))}`
   execFileSync(process.env.SOFFICE ?? "soffice", [profile, "--headless", "--convert-to", "pdf", "--outdir", tmp, a, b], { stdio: "ignore" })
   const bBytes = readFileSync(join(tmp, "b.pdf"))
   const [A, B] = [await findText(readFileSync(join(tmp, "a.pdf"))), await findText(bBytes)]
 
+  // In A a marker pushes what follows it on its line by its own width; B has no such push.
+  const push = (m) => A.markers.filter((o) => sameLine(o, m) && o.x < m.x).reduce((s, o) => s + o.w, 0)
+
   // The same pages in Word, A and B, and every box where it was: else the markers moved the layout.
-  if (A.pages !== B.pages || (word && Number(word) !== A.pages)) fail(`pages: Word ${word ?? "?"}, A ${A.pages}, B ${B.pages}`)
+  if (A.pages !== B.pages || word !== A.pages) fail(`pages: Word ${word}, A ${A.pages}, B ${B.pages}`)
   if (B.markers.length) fail(`pass B still shows {{${B.markers[0].text}}}`)
   for (let p = 0; p < A.pages; p++) {
     const [pa, pb] = [A.boxes.filter((x) => x.page === p), B.boxes.filter((x) => x.page === p)]
     if (pa.length !== pb.length) fail(`page ${p + 1}: ${pa.length} boxes with markers, ${pb.length} without`)
-    pa.forEach((x, k) => Math.abs(x.y - pb[k].y) > 1 && fail(`page ${p + 1}: box ${k + 1} moves ${(x.y - pb[k].y).toFixed(1)} pt`))
+    // Up or down the page nothing moves; to the right a box moves only by the widths of the markers before it.
+    pa.forEach((x, k) => {
+      const [dx, dy] = [x.x - pb[k].x, x.y - pb[k].y]
+      if (Math.abs(dy) > 1 || dx < -1 || dx > push(x) + 1) fail(`page ${p + 1}: box ${k + 1} moves ${dx.toFixed(1)}, ${dy.toFixed(1)} pt`)
+    })
   }
+  // Every marker written is on A's pages and nothing else is: a marker the text reader missed would lose its field.
+  const left = A.markers.map((m) => m.text)
+  for (const w of written) {
+    if (!left.includes(w)) fail(`{{${w}}} is in the blank but not found on A's pages`)
+    left.splice(left.indexOf(w), 1)
+  }
+  if (left.length) fail(`{{${left[0]}}} found on A's pages is not a marker of the blank`)
   const names = A.markers.map((m) => m.text.split(":")[0])
   const twice = names.find((n, i) => names.indexOf(n) !== i)
   if (twice) fail(`{{${twice}}} twice`)
 
-  // In A a marker pushes what follows it on its line by its own width; B has no such push.
-  const push = (m) => A.markers.filter((o) => sameLine(o, m) && o.x < m.x).reduce((s, o) => s + o.w, 0)
   const text = [], boxes = []
   for (const m of A.markers) {
     const cell = /^([^:]+):(\d+(?:\.\d+)?)x(\d+(?:\.\d+)?)$/.exec(m.text)

@@ -1,4 +1,4 @@
-import { layoutMultilineText, PDFDocument, PDFName, StandardFonts, TextAlignment, type PDFAcroRadioButton, type PDFFont, type PDFForm, type PDFWidgetAnnotation } from "pdf-lib"
+import { PDFDocument, PDFName, StandardFonts, type PDFAcroRadioButton, type PDFFont, type PDFForm, type PDFWidgetAnnotation } from "pdf-lib"
 import { OPTIONS, visible, type ChoiceKey, type Values } from "./anketa"
 import { cellText, printedText } from "./print"
 import type { Questionnaire, Tick } from "./questionnaire"
@@ -9,19 +9,46 @@ export const fitFontSize = (widthAt1pt: number, box: { width: number; height: nu
   // A value too long even at 4 pt runs past the box: the field stays editable and the specialist shortens it.
   Math.max(4, Math.min(formSize > 0 ? formSize : 10, (box.width - 4) / widthAt1pt, box.height * 0.75))
 
-// The largest whole size from `base` down at which Preview shows every wrapped line of the text. Preview lays a multiline
-// field out itself from /V and /DA, tighter than pdf-lib's appearance: in the box inset 3 pt on each side (and inside
-// any border), at a line pitch of up to 1.25 × size (5 pt at 4, 10 at 8, 12 at 10, 14 at 12), leaving out a line that
-// doesn't fit whole. Whole sizes, because Preview rounds the size before it lays the lines out.
-// ponytail: measured in Preview on the Polish form's boxes; re-measure if another viewer cuts lines off.
+// The lines Preview (PDFKit) wraps a multiline field's text into, at most: it breaks after spaces, after a "-" or "/"
+// that no digit or space follows, and through a word wider than the line, 3 pt in from each side, measuring with macOS
+// Helvetica, whose kerning is lighter than the AFM's: pdf-lib's kerned widths fell up to 6.5 pt short of it on a
+// 50-character line at 10 pt. Unkerned AFM widths fell short by 0.08 pt at most, so ½ pt more inset per side covers it.
+// ponytail: measured in scripts/render-pdf-page.js renders and AppKit widths of 3000 made-up strings at 4–14 pt;
+// re-measure if a viewer cuts lines off.
+export function previewLines(text: string, boxWidth: number, size: number, font: PDFFont): number {
+  const width = boxWidth - 7
+  const w = (s: string) => [...s.trimEnd()].reduce((sum, c) => sum + font.widthOfTextAtSize(c, size), 0)
+  let n = 0
+  for (const para of text.split("\n")) {
+    n++
+    let line = ""
+    for (const piece of para.match(/\S*?(?:\s+|[-/](?=[^\d\s])|$)/g) ?? []) {
+      if (w(line + piece) <= width) {
+        line += piece
+        continue
+      }
+      if (line) n++
+      line = ""
+      for (const c of w(piece) <= width ? [piece] : [...piece]) {
+        if (line && w(line + c) > width) {
+          n++
+          line = ""
+        }
+        line += c
+      }
+    }
+  }
+  return n
+}
+
+// The largest whole size from `base` down at which Preview shows every wrapped line of the text: it sets them
+// round(1.2 × size) apart (5 pt at 4, 10 at 8, 12 at 10, 14 at 12), 3 pt in from the top and bottom (a 1 pt border takes
+// ½ pt less, not more), and leaves out a line that doesn't fit whole. Whole sizes, the ones measured.
 function multilineSize(text: string, widget: PDFWidgetAnnotation, base: number, font: PDFFont): number {
   const { width, height } = widget.getRectangle()
-  const inset = (widget.getBorderStyle()?.getWidth() ?? 0) + 3
-  const bounds = { x: inset, y: inset, width: width - 2 * inset, height: height - 2 * inset }
-  const lines = (size: number) => layoutMultilineText(text, { alignment: TextAlignment.Left, fontSize: size, font, bounds }).lines.length
   let size = Math.floor(base)
   // A text too long even at 4 pt loses its last lines: the field stays editable and the specialist shortens it.
-  while (size > 4 && lines(size) * 1.25 * size > bounds.height) size--
+  while (size > 4 && previewLines(text, width, size, font) * Math.round(1.2 * size) > height - 6) size--
   return size
 }
 
@@ -59,14 +86,15 @@ export async function fillForm(bytes: ArrayBuffer | Uint8Array, v: Values, q: Qu
     if (!text) continue
     // A size of our own in the DA: the forms' automatic size grows the text with the box (36–49 pt in the Polish ones),
     // so a multiline field keeps the form's size (or 10 pt) and goes smaller only when its lines would not all show.
-    // pdf-lib reads a widget's DA before the field's, so a widget that has one gets it too.
+    // Every widget gets it too: Preview takes the size from the widget's own DA only (a widget without one, as in the
+    // forms make-form builds, is drawn at 12 pt), and pdf-lib reads a widget's DA before the field's.
     const size = field.isMultiline()
       ? multilineSize(text, widgets[0], formSize > 0 ? formSize : 10, helvetica)
       : fitFontSize(helvetica.widthOfTextAtSize(text, 1), box, formSize)
     const setDa = () => {
       const da = `/Helv ${size} Tf 0 g`
       field.acroField.setDefaultAppearance(da)
-      for (const w of widgets) if (w.getDefaultAppearance()) w.setDefaultAppearance(da)
+      for (const w of widgets) w.setDefaultAppearance(da)
     }
     setDa()
     // Throws on text Helvetica cannot encode.

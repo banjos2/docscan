@@ -3,7 +3,8 @@ make the two passes make-form converts to PDF. Standard library only; run with -
 
   python3 -I scripts/blanks/docx.py dump <in.docx>
   python3 -I scripts/blanks/docx.py apply <in.docx> <edits.json> <out.docx> --removed <removed.txt>
-  python3 -I scripts/blanks/docx.py passes <clean.docx> <a.docx> <b.docx>   (prints "word pages N" from docProps/app.xml)
+  python3 -I scripts/blanks/docx.py passes <clean.docx> <a.docx> <b.docx>
+    (prints "word pages N" from docProps/app.xml and "markers [...]", the markers written, as JSON)
 
 edits.json: {"edits": [{"part": "word/document.xml", "p": 12, "r": [3, 4], "replace": "{{surname:180x12}}"},
                        {"p": 13, "r": [2], "clear": true}, {"p": 20, "r": [1], "box": "sex.F"},
@@ -11,9 +12,12 @@ edits.json: {"edits": [{"part": "word/document.xml", "p": 12, "r": [3, 4], "repl
              "media": ["word/media/image2.jpeg"]}
 p and r are the paragraph and run numbers dump prints; "part" defaults to word/document.xml.
 replace: the runs' text goes, the first run holds the marker in its own format. clear: the runs lose text, field codes
-and drawings (a tick drawn over a box), keep tabs and breaks. box: the run's box glyph gets the marker right after it.
+and drawings (a tick drawn over a box), keep tabs and breaks. box: the run's box glyph gets the marker right after it;
+a run with several boxes takes a list, "box": ["q.no", "q.yes"], one marker per box in order ("" for a box left out).
 add: a marker run at the start or the end of a paragraph that has no value. para: a paragraph of its own right after
 the label's, for a field below a label that has no empty line under it. media: images to drop with their drawings.
+apply also blanks every author and initials, and refuses a sample with comments, people.xml or a glossary.
+After any change here: python3 -I scripts/blanks/docx-selfcheck.py
 """
 import json
 import re
@@ -30,6 +34,13 @@ BOX_CHARS = set("☐☑☒□■▢▣◻◼❏❐❑❒⬜\uf0a8\uf06f\uf0fe\uf
 BOX_SYMS = {"F0A8", "F06F", "F0FE", "F0FD", "F078", "F0A3", "F0A2", "F071", "F072"}
 MARKER = re.compile(r"\{\{[^{}]+\}\}")
 W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+# Comments, the people who wrote them and a glossary's building blocks: apply doesn't clean them, so it refuses a
+# sample that has them (delete them in Word and save it again).
+REFUSED = re.compile(r"word/(comments\w*\.xml|people\.xml|glossary/)")
+
+
+def refused(names):
+    return [n for n in names if REFUSED.match(n)]
 
 
 def elements(node, name=None):
@@ -73,7 +84,7 @@ def drawing(el, rels):
     ids = [i for b in el.getElementsByTagName("a:blip") + el.getElementsByTagName("v:imagedata") if (i := b.getAttribute("r:embed") or b.getAttribute("r:id") or b.getAttribute("r:link"))]
     text = " +text" if el.getElementsByTagName("w:txbxContent") else ""
     if ids:
-        return f"[image {','.join(sorted({rels[i].getAttribute('Target') if i in rels else '?' for i in ids}))}{size}{text}]"
+        return f"[image {','.join(sorted({shown_target(rels[i]) if i in rels else '?' for i in ids}))}{size}{text}]"
     geo = [g.getAttribute("prst") for g in el.getElementsByTagName("a:prstGeom")] or [g.nodeName for g in el.getElementsByTagName("*") if g.nodeName in ("v:rect", "v:oval", "v:line", "v:shape", "v:roundrect")]
     return f"[shape {','.join(sorted(set(geo))) or '?'}{size}{text}]"
 
@@ -82,16 +93,27 @@ def box_tag(c):
     return f"[{c}]" if c in "☐□" else f"[box {ord(c):04X}]"
 
 
-# A run as pieces: ("text", s) the reader sees, ("tag", label) for what isn't text.
+# A relationship's target as dump shows it: a file outside the package (a linked picture, a link) is a path or an
+# address someone typed, so every letter and digit of it is masked.
+def shown_target(rel):
+    t = rel.getAttribute("Target")
+    if rel.getAttribute("TargetMode") != "External":
+        return mask(t)
+    scheme = re.match(r"[a-z]+:", t)
+    return (scheme.group() if scheme else "") + "".join(shape_char(c) for c in t[len(scheme.group()) if scheme else 0:])
+
+
+# A run as pieces: ("text", s) the reader sees, ("tag", label) for a box, symbol or drawing, which ends a word, and
+# ("note", label) for a link, field or deletion, which doesn't: a value split over two such runs is still one word.
 def pieces(run, rels=None):
     out = []
     if owner(run, "w:hyperlink") is not None:
-        out.append(("tag", "[link]"))
+        out.append(("note", "[link]"))
     for el in elements(run):
         n = el.nodeName
         if n in ("w:t", "w:delText", "w:instrText"):
             if n != "w:t":
-                out.append(("tag", "[del]" if n == "w:delText" else "[instr]"))
+                out.append(("note", "[del]" if n == "w:delText" else "[instr]"))
             for c in text_of(el):
                 out.append(("tag", box_tag(c)) if c in BOX_CHARS else ("text", c))
         elif n == "w:tab":
@@ -105,7 +127,7 @@ def pieces(run, rels=None):
         elif n in ("w:drawing", "w:pict", "w:object", "mc:AlternateContent"):
             out.append(("tag", drawing(el, rels or {})))
         elif n == "w:fldChar":
-            out.append(("tag", "[chk]" if el.getElementsByTagName("w:checkBox") else "[fld]"))
+            out.append(("note", "[chk]" if el.getElementsByTagName("w:checkBox") else "[fld]"))
     return out
 
 
@@ -129,7 +151,8 @@ def sensitive(word):
 
 # Masks the paragraph's text as a whole before it is cut back into runs: a value split over runs is one word.
 def masked_runs(run_pieces):
-    joined = "".join(s if k == "text" else "\0" for rp in run_pieces for k, s in rp)
+    width = {"text": len, "tag": lambda s: 1, "note": lambda s: 0}
+    joined = "".join(s if k == "text" else "\0" * width[k](s) for rp in run_pieces for k, s in rp)
     chars = list(joined)
     # Our markers are neither masked nor part of the word next to them.
     words = MARKER.sub(lambda m: "\0" * len(m.group()), joined)
@@ -141,7 +164,7 @@ def masked_runs(run_pieces):
         s = ""
         for k, piece in rp:
             s += "".join(chars[i:i + len(piece)]) if k == "text" else piece
-            i += len(piece) if k == "text" else 1
+            i += width[k](piece)
         out.append(s.replace("\t", "\\t").replace("\n", "\\n"))
     return out
 
@@ -263,7 +286,7 @@ def dump(path):
             uses.setdefault(target, []).append(f"{part} p{ps.index(p) if p in ps else '?'}{size}")
         for rid, rel in rels.items():
             if rel.getAttribute("TargetMode") == "External":
-                print(f"   external link {rid}: {mask(rel.getAttribute('Target'))}")
+                print(f"   external link {rid}: {shown_target(rel)}")
         for tag in ("w:ins", "w:del", "w:instrText", "w:fldSimple", "w:hyperlink", "mc:AlternateContent", "w:sdt", "w:ffData", "w:txbxContent"):
             counts[tag] = counts.get(tag, 0) + len(doc.getElementsByTagName(tag))
     print("== images")
@@ -273,6 +296,10 @@ def dump(path):
             px = pixels(data)
             print(f"{n}: {len(data)} bytes, {f'{px[0]}x{px[1]} px' if px else '? px'}, used: {'; '.join(uses.get(n, [])) or 'nowhere in the story parts'}")
     print("== parts: " + " ".join(names))
+    if refused(names):
+        print("== apply refuses: " + " ".join(refused(names)))
+    # Names and initials of whoever made a tracked change: apply blanks them.
+    counts["author"] = sum(len(re.findall(rb':(?:author|initials)=', z.read(n))) for n in names if n.endswith((".xml", ".rels")))
     print("== counts: " + " ".join(f"{k}={v}" for k, v in counts.items()))
     if "word/settings.xml" in names:
         s = minidom.parseString(z.read("word/settings.xml"))
@@ -301,6 +328,9 @@ def clone_with(run, text):
 
 def apply(src, edits_path, dst, removed_path):
     z = zipfile.ZipFile(src)
+    if refused(z.namelist()):
+        sys.exit(f"{src}: {', '.join(refused(z.namelist()))}: apply doesn't clean comments, their authors or a glossary;"
+                 " delete them in Word (Review > Delete all comments) and save the sample again")
     spec = json.load(open(edits_path, encoding="utf-8"))
     removed = []
     docs = {}
@@ -362,7 +392,10 @@ def apply(src, edits_path, dst, removed_path):
             own = runs(p)
             new = p.ownerDocument.createElementNS(W, "w:p")
             for ppr in elements(p, "w:pPr"):
-                new.appendChild(ppr.cloneNode(True))
+                ppr = new.appendChild(ppr.cloneNode(True))
+                # Not the label's list number: a numbered paragraph would take the next number and shift the rest.
+                for num in elements(ppr, "w:numPr"):
+                    ppr.removeChild(num)
             r = clone_with(own[-1], e["para"]) if own else p.ownerDocument.createElementNS(W, "w:r")
             if not own:
                 set_text(r, e["para"])
@@ -370,12 +403,21 @@ def apply(src, edits_path, dst, removed_path):
             p.parentNode.insertBefore(new, p.nextSibling)
         elif "box" in e:
             (r,) = rs
+            at = f"{part} p{e['p']} r{e['r'][0]}"
+            if r.parentNode is None:
+                sys.exit(f"{at}: one box edit per run; for several boxes in it list their markers in order, \"\" for a box left out")
+            # One name, or a list for the run's boxes in order.
+            names = e["box"] if isinstance(e["box"], list) else [e["box"]]
             text = run_text(r)
-            i = next((k for k, c in enumerate(text) if c in "☐□"), None)
-            if i is None:
-                sys.exit(f"{part} p{e['p']} r{e['r'][0]}: no box in the run")
+            boxes = [k for k, c in enumerate(text) if c in "☐□"]
+            if len(boxes) < len(names):
+                sys.exit(f"{at}: {len(names)} markers for {len(boxes)} boxes in the run")
             # The blank's own box glyph stays (a symbol box becomes ☐), the marker follows it in a run of its own.
-            new = [clone_with(r, s) for s in (text[:i], text[i], "{{" + e["box"] + "}}", text[i + 1:]) if s]
+            cut, start = [], 0
+            for k, name in zip(boxes, names):
+                cut += [text[start:k], text[k], "{{" + name + "}}" if name else ""]
+                start = k + 1
+            new = [clone_with(r, s) for s in cut + [text[start:]] if s]
             for n in new:
                 r.parentNode.insertBefore(n, r)
             r.parentNode.removeChild(r)
@@ -427,6 +469,14 @@ def apply(src, edits_path, dst, removed_path):
                         erase(el.getAttribute(a))
                         el.removeAttribute(a)
 
+    # A tracked change keeps who made it, by name and initials, in whatever part it is in.
+    for part in [n for n in z.namelist() if n.endswith((".xml", ".rels"))]:
+        if re.search(rb':(author|initials)=', z.read(part)):
+            for el in doc_of(part).getElementsByTagName("*"):
+                for a in [a for a in el.attributes.keys() if a.split(":")[-1] in ("author", "initials") and el.getAttribute(a)]:
+                    erase(el.getAttribute(a))
+                    el.setAttribute(a, "")
+
     def clear_text(part, keep=lambda el: False):
         if part not in z.namelist():
             return
@@ -466,7 +516,13 @@ def apply(src, edits_path, dst, removed_path):
 # down in LibreOffice, and a condensed 1% run comes out narrower than nothing and is not drawn.
 def passes(src, a, b):
     z = zipfile.ZipFile(src)
+    # The page count Word saved, for make-form to hold LibreOffice's pages against.
+    app = z.read("docProps/app.xml") if "docProps/app.xml" in z.namelist() else b""
+    pages = re.search(rb"<Pages>(\d+)</Pages>", app)
+    if not pages:
+        sys.exit(f"{src}: no <Pages> in docProps/app.xml to check the pages against; open the blank in Word and save it")
     out = {"a": {}, "b": {}}
+    written = []
     for part in [n for n in z.namelist() if STORY.match(n)]:
         for key in out:
             doc = minidom.parseString(z.read(part))
@@ -477,6 +533,8 @@ def passes(src, a, b):
                         continue
                     if not MARKER.fullmatch(text):
                         sys.exit(f"{part} p{i}: a marker must be the whole text of its run")
+                    if key == "a":
+                        written.append(text[2:-2])
                     marks = [m for ppr in elements(p, "w:pPr") for m in elements(ppr, "w:rPr")]
                     for mark in marks:
                         for el in elements(mark, "w:position"):
@@ -509,10 +567,9 @@ def passes(src, a, b):
         with zipfile.ZipFile(dst, "w", zipfile.ZIP_DEFLATED) as zo:
             for info in z.infolist():
                 zo.writestr(info.filename, out[key].get(info.filename) or z.read(info.filename))
-    # The page count Word saved, for make-form to hold LibreOffice's pages against.
-    app = z.read("docProps/app.xml") if "docProps/app.xml" in z.namelist() else b""
-    m = re.search(rb"<Pages>(\d+)</Pages>", app)
-    print(f"word pages {m.group(1).decode() if m else '?'}")
+    print(f"word pages {pages.group(1).decode()}")
+    # Every marker written, for make-form to find each one on A's pages.
+    print("markers " + json.dumps(written, ensure_ascii=False))
 
 
 if __name__ == "__main__":
