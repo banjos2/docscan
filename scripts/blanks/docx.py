@@ -26,9 +26,9 @@ paragraph's w:ind attributes (left, right, start, end, firstLine, hanging) in tw
 to its indent whose last word the markers of pass A would push to the next line (B must keep its breaks: check the
 render), or a restored box moved off its column's rule. spacing: its
 w:spacing attributes (before, after, line in twips; lineRule auto, exact or atLeast), atLeast for an exact line
-height lower than its text, which the converter clips at the top. row: the w:trHeight attributes (val in twips, hRule) of
-the table row p is in, for a field that needs a second line in an exact row (take the room from a row above with empty
-space at its bottom, so nothing below moves). bullet: {"position": 0} for the list level of the
+height lower than its text, which the converter clips at the top. row: the w:trHeight attributes (val in twips, above 0;
+hRule) of the table row p is in, for a field that needs a second line in an exact row (take the room from a
+neighbouring row, above or below, with empty space, so no other row moves). bullet: {"position": 0} for the list level of the
 paragraph p whose marker has a w:position of its own, which the converter draws as a tiny superscript box (the level
 is shared: every paragraph of that list changes). checkbox: r is the begin run of a legacy check-box field ([chk]); the
 whole field goes, checked state and all, and a text ☐ in that run's font and size (no bold, spacing or scale; "size" in
@@ -427,7 +427,7 @@ def apply(src, edits_path, dst, removed_path):
             # line whose restored box would sit on its column's rule: the indent of the column's list markers.
             # spacing: an exact line height lower than its text, which the converter clips at the top: atLeast.
             # row: the height of the table row p is in (w:trHeight), for a field that needs a second line in an exact
-            # row; the room comes from a row above with empty space at its bottom, so nothing below moves.
+            # row; the room comes from a neighbouring row, above or below, with empty space, so no other row moves.
             tag = next(t for t in ("ind", "spacing", "row") if t in e)
             el = "trHeight" if tag == "row" else tag
             at = f"{part} p{e['p']}"
