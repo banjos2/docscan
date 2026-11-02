@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ACTUAL_ADDRESS, EMPLOYMENT, HOST_KIND, ITEM_OF, MEANS, OPTIONS, SCHENGEN, visible, type ChoiceKey, type Source, type Sources, type TextKey, type Values } from "@/lib/anketa"
 import { CITIES } from "@/lib/cities"
 import { printedText, type PrintKey } from "@/lib/print"
-import { itemLabel, itemsNote, offered, QUESTIONNAIRES, type Questionnaire } from "@/lib/questionnaire"
+import { inItemOrder, itemLabel, itemNumber, itemsNote, offered, QUESTIONNAIRES, type Questionnaire } from "@/lib/questionnaire"
 import { cn } from "@/lib/utils"
 import type { Errors } from "@/lib/validate"
 
@@ -147,16 +147,18 @@ const SECTIONS: { title: string; description: string; fromDoc?: boolean; fields:
   },
 ]
 
+// A field as shown: its label read for these values and numbered by the blank.
+type Labelled = Omit<Field, "label"> & { label: string }
+
 // Several fields of one blank item read "19.1.", "19.2." … instead of repeating "19.", numbered over the fields shown.
-function subNumbered(fields: Field[], v: Values): Field[] {
-  const labels = fields.map((f) => (typeof f.label === "function" ? f.label(v) : f.label))
+function subNumbered(fields: Labelled[]): Labelled[] {
   const item = (label: string) => /^(\d+)\. /.exec(label)?.[1]
   const seen: Record<string, number> = {}
-  return fields.map((f, i) => {
-    const n = item(labels[i])
-    if (!n || labels.filter((l) => item(l) === n).length < 2) return f
+  return fields.map((f) => {
+    const n = item(f.label)
+    if (!n || fields.filter((g) => item(g.label) === n).length < 2) return f
     seen[n] = (seen[n] ?? 0) + 1
-    return { ...f, label: labels[i].replace(`${n}. `, `${n}.${seen[n]}. `) }
+    return { ...f, label: f.label.replace(`${n}. `, `${n}.${seen[n]}. `) }
   })
 }
 
@@ -199,11 +201,8 @@ export function AnketaForm({ values, sources, errors, questionnaire, onChange, o
       </Card>
       {SECTIONS.map((s) => {
         const { items } = questionnaire
-        const shown = s.fields.filter((f) => visible(f.key, values, items))
-        const numbers = shown.flatMap((f) => {
-          const item = ITEM_OF[f.key], n = item && items[item]
-          return typeof n === "number" ? [n] : []
-        })
+        const shown = inItemOrder(s.fields.filter((f) => visible(f.key, values, items)), items)
+        const numbers = shown.flatMap((f) => itemNumber(ITEM_OF[f.key], items) ?? [])
         const labelled = shown.map((f) => ({ ...f, label: itemLabel(typeof f.label === "function" ? f.label(values) : f.label, ITEM_OF[f.key], items) }))
         return (
           <Card key={s.title}>
@@ -212,7 +211,7 @@ export function AnketaForm({ values, sources, errors, questionnaire, onChange, o
               <CardDescription>{[itemsNote(numbers), s.description].filter(Boolean).join(". ")}</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-x-4 gap-y-5 sm:grid-cols-2">
-              {subNumbered(labelled, values).map((f) => (
+              {subNumbered(labelled).map((f) => (
                 <FieldRow
                   key={f.key}
                   field={f}
@@ -284,7 +283,7 @@ function FieldRow({
   badge,
   onChange,
 }: {
-  field: Field
+  field: Labelled
   values: Values
   questionnaire: Questionnaire
   printed: Partial<Record<PrintKey, string>>
@@ -293,7 +292,6 @@ function FieldRow({
   onChange: Props["onChange"]
 }) {
   const id = `field-${f.key}`
-  const label = typeof f.label === "function" ? f.label(values) : f.label
   const errorId = error ? `${id}-error` : undefined
   const hint = f.hint && printed[f.hint]
   const hintId = hint ? `${id}-hint` : undefined
@@ -352,10 +350,10 @@ function FieldRow({
       <div className="flex min-h-5 items-center justify-between gap-2">
         {f.type === "means" ? (
           <span id={`${id}-label`} className="text-sm font-medium">
-            {label}
+            {f.label}
           </span>
         ) : (
-          <Label htmlFor={id}>{label}</Label>
+          <Label htmlFor={id}>{f.label}</Label>
         )}
         {badge}
       </div>

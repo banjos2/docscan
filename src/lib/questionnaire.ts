@@ -1,4 +1,4 @@
-import type { Item, Items, Values } from "./anketa"
+import { ITEM_OF, type Item, type Items, type Values } from "./anketa"
 import { BG } from "./blanks/bg"
 import es from "./blanks/es.fields"
 import gr from "./blanks/gr.fields"
@@ -58,10 +58,27 @@ export function applyQuestionnaire(v: Values, from: Questionnaire, to: Questionn
   return CITIES[from.country] === CITIES[to.country] ? next : { ...next, submissionCity: "" }
 }
 
+// The blank's number of an item; none where the blank prints none or the questionnaire lacks the item.
+export function itemNumber(item: Item | undefined, items: Items): number | undefined {
+  const n = item && items[item]
+  return typeof n === "number" ? n : undefined
+}
+
 // "28. Дата въезда" by the blank's number, the bare label where the blank prints none.
 export function itemLabel(label: string, item: Item | undefined, items: Items): string {
-  const n = item && items[item]
-  return typeof n === "number" ? `${n}. ${label}` : label
+  const n = itemNumber(item, items)
+  return n === undefined ? label : `${n}. ${label}`
+}
+
+// A section's fields in the blank's item order (D asks fingerprints, 27, before the dates, 29 and 30), the form's own
+// order among equals. A field without a number stays right after the one before it: B's dates inside item 27.
+export function inItemOrder<T extends { key: keyof Values }>(fields: T[], items: Items): T[] {
+  let last = 0
+  const numbered = fields.map((f) => {
+    last = itemNumber(ITEM_OF[f.key], items) ?? last
+    return { f, n: last }
+  })
+  return numbered.sort((a, b) => a.n - b.n).map(({ f }) => f)
 }
 
 // "Пункты 19–20", "Пункт 33" or "" for the numbers of the fields a section shows.

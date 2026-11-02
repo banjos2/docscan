@@ -1,8 +1,8 @@
 import { expect, test } from "vitest"
-import { MEANS, OPTIONS } from "./anketa"
+import { ITEM_OF, MEANS, OPTIONS, type Items } from "./anketa"
 import { PL_D } from "./blanks/pl-d"
 import { PRINT_KEYS } from "./print"
-import { applyQuestionnaire, itemLabel, itemsNote, NUMBERING_A, NUMBERING_B, NUMBERING_D, offered, QUESTIONNAIRES } from "./questionnaire"
+import { applyQuestionnaire, inItemOrder, itemLabel, itemNumber, itemsNote, NUMBERING_A, NUMBERING_B, NUMBERING_D, offered, QUESTIONNAIRES } from "./questionnaire"
 import { SPECIMEN } from "./specimen"
 
 const Q = (id: string) => QUESTIONNAIRES.find((q) => q.id === id)!
@@ -27,6 +27,19 @@ test("a label takes its number from the blank and has none where the blank print
   expect(itemLabel("Дата въезда", "arrival", NUMBERING_B)).toBe("Дата въезда")
   expect(itemLabel("Дата въезда", "arrival", NUMBERING_D)).toBe("29. Дата въезда")
   expect(itemLabel("1. Фамилия", undefined, NUMBERING_D)).toBe("1. Фамилия")
+})
+
+test("a section's fields follow the blank's item numbers, an unnumbered one staying after the field before it", () => {
+  // «Поездка» in the form's own order.
+  const trip = ["purpose", "kpNumber", "basis", "destination", "firstEntry", "entries", "prevVisas", "prevVisa1From", "prevVisa1To",
+    "arrivalDate", "departureDate", "fingerprints"] as const
+  const order = (items: Items) => inItemOrder(trip.filter((key) => items[ITEM_OF[key]!] !== undefined).map((key) => ({ key })), items).map((f) => f.key)
+  expect(order(Q("pl-kp").items)).toEqual(["purpose", "kpNumber", "firstEntry", "entries", "prevVisas", "prevVisa1From", "prevVisa1To", "fingerprints", "arrivalDate", "departureDate"])
+  expect(order(Q("pl-kp").items).map((key) => itemNumber(ITEM_OF[key], Q("pl-kp").items))).toEqual([21, 21, 23, 24, 26, 26, 26, 27, 29, 30])
+  expect(order(Q("pl-work").items)).toEqual(["purpose", "basis", "firstEntry", "entries", "prevVisas", "prevVisa1From", "prevVisa1To", "fingerprints", "arrivalDate", "departureDate"])
+  // A and B as before: B's dates print inside item 27, without a number.
+  expect(order(NUMBERING_A)).toEqual(["purpose", "destination", "firstEntry", "entries", "arrivalDate", "departureDate", "fingerprints"])
+  expect(order(NUMBERING_B)).toEqual(["purpose", "destination", "firstEntry", "entries", "arrivalDate", "departureDate", "fingerprints"])
 })
 
 test("a section note spans the numbers its fields show", () => {
