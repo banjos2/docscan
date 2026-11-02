@@ -10,7 +10,9 @@ edits.json: {"edits": [{"part": "word/document.xml", "p": 12, "r": [3, 4], "repl
                        {"p": 13, "r": [2], "clear": true}, {"p": 20, "r": [1], "box": "sex.F"},
                        {"p": 30, "add": "{{tick}}", "at": "start"}, {"p": 41, "para": "{{org:380x30}}"},
                        {"p": 50, "r": [7], "add": "{{sponsorWho:140x11}}", "after": "(specify)"},
-                       {"p": 50, "ind": {"right": 2794}}, {"p": 60, "spacing": {"lineRule": "atLeast"}}],
+                       {"p": 50, "ind": {"right": 2794}}, {"p": 60, "spacing": {"lineRule": "atLeast"}},
+                       {"p": 70, "r": [0], "checkbox": "sex.M"}, {"p": 71, "r": [0], "checkbox": "", "size": 16},
+                       {"p": 80, "row": {"val": 1009}}],
              "media": ["word/media/image2.jpeg"], "pages": 4}
 p and r are the paragraph and run numbers dump prints; "part" defaults to word/document.xml.
 replace: the runs' text goes, the first run holds the marker in its own format. clear: the runs lose text, field codes
@@ -24,9 +26,14 @@ paragraph's w:ind attributes (left, right, start, end, firstLine, hanging) in tw
 to its indent whose last word the markers of pass A would push to the next line (B must keep its breaks: check the
 render), or a restored box moved off its column's rule. spacing: its
 w:spacing attributes (before, after, line in twips; lineRule auto, exact or atLeast), atLeast for an exact line
-height lower than its text, which the converter clips at the top. bullet: {"position": 0} for the list level of the
+height lower than its text, which the converter clips at the top. row: the w:trHeight attributes (val in twips, hRule) of
+the table row p is in, for a field that needs a second line in an exact row (take the room from a row above with empty
+space at its bottom, so nothing below moves). bullet: {"position": 0} for the list level of the
 paragraph p whose marker has a w:position of its own, which the converter draws as a tiny superscript box (the level
-is shared: every paragraph of that list changes). media: images to drop with their drawings.
+is shared: every paragraph of that list changes). checkbox: r is the begin run of a legacy check-box field ([chk]); the
+whole field goes, checked state and all, and a text ☐ in that run's font and size (no bold, spacing or scale; "size" in
+half-points sets another) takes its place, the marker right after it ("" for none). apply stops while a legacy check-box field is left; dump counts the checked ones, never says which.
+media: images to drop with their drawings.
 pages: only for a sample whose docProps/app.xml has no <Pages> (Word never saved it): the page count for make-form.
 apply also blanks every author and initials, and refuses a sample with comments, people.xml or a glossary.
 After any change here: python3 -I scripts/blanks/docx-selfcheck.py
@@ -274,6 +281,12 @@ def image_uses(z, part, doc):
             yield el, rid, target_path(part, rel.getAttribute("Target"))
 
 
+# A legacy box's state: w:checked, else w:default; an on/off without w:val is on.
+def is_checked(box):
+    state = elements(box, "w:checked") or elements(box, "w:default")
+    return bool(state) and state[0].getAttribute("w:val") not in ("0", "false", "off")
+
+
 def dump(path):
     z = zipfile.ZipFile(path)
     level = levels(z)
@@ -302,6 +315,8 @@ def dump(path):
                 print(f"   external link {rid}: {shown_target(rel)}")
         for tag in ("w:ins", "w:del", "w:instrText", "w:fldSimple", "w:hyperlink", "mc:AlternateContent", "w:sdt", "w:ffData", "w:txbxContent"):
             counts[tag] = counts.get(tag, 0) + len(doc.getElementsByTagName(tag))
+        # Which legacy boxes are checked is the client's choice: only how many.
+        counts["checked"] = counts.get("checked", 0) + sum(map(is_checked, doc.getElementsByTagName("w:checkBox")))
     print("== images")
     for n in names:
         if re.search(r"\.(png|jpe?g|gif|bmp|tiff?|emf|wmf|svg)$", n, re.I):
@@ -339,8 +354,9 @@ def clone_with(run, text):
     return r
 
 
-# The w:pPr attributes the ind and spacing edits may set; anything else would write an invalid attribute.
-PPR_ATTRS = {"ind": ("left", "right", "start", "end", "firstLine", "hanging"), "spacing": ("before", "after", "line", "lineRule")}
+# The attributes the ind, spacing (w:pPr) and row (w:trHeight) edits may set; anything else would write an invalid one.
+PPR_ATTRS = {"ind": ("left", "right", "start", "end", "firstLine", "hanging"), "spacing": ("before", "after", "line", "lineRule"),
+             "row": ("val", "hRule")}
 LINE_RULES = ("auto", "exact", "atLeast")
 
 
@@ -399,23 +415,27 @@ def apply(src, edits_path, dst, removed_path):
                 for el in elements(r):
                     if el.nodeName not in ("w:rPr", "w:tab", "w:br", "w:cr"):
                         r.removeChild(el)
-        elif "ind" in e or "spacing" in e:
+        elif "ind" in e or "spacing" in e or "row" in e:
             # ind: a line full to its indent, which the markers of pass A would push the last word off: a little more
             # room; B keeps its line breaks while the room added is less than the next word (check the render). Also a
             # line whose restored box would sit on its column's rule: the indent of the column's list markers.
             # spacing: an exact line height lower than its text, which the converter clips at the top: atLeast.
-            tag = "ind" if "ind" in e else "spacing"
+            # row: the height of the table row p is in (w:trHeight), for a field that needs a second line in an exact
+            # row; the room comes from a row above with empty space at its bottom, so nothing below moves.
+            tag = next(t for t in ("ind", "spacing", "row") if t in e)
+            el = "trHeight" if tag == "row" else tag
             at = f"{part} p{e['p']}"
-            own = [i for ppr in elements(p, "w:pPr") for i in elements(ppr, "w:" + tag)]
+            holders = [pr for tr in [owner(p, "w:tr")] if tr is not None for pr in elements(tr, "w:trPr")] if tag == "row" else elements(p, "w:pPr")
+            own = [i for pr in holders for i in elements(pr, "w:" + el)]
             if not own:
-                sys.exit(f"{at}: no w:{tag} to change")
+                sys.exit(f"{at}: no w:{el} to change")
             for name, value in e[tag].items():
                 if name not in PPR_ATTRS[tag]:
-                    sys.exit(f"{at}: no attribute {name!r} for w:{tag}; {tag} sets {', '.join(PPR_ATTRS[tag])}")
-                if name == "lineRule" and value not in LINE_RULES:
-                    sys.exit(f"{at}: w:spacing lineRule is {', '.join(LINE_RULES)}, not {value!r}")
-                if name != "lineRule" and (not isinstance(value, int) or isinstance(value, bool)):
-                    sys.exit(f"{at}: w:{tag} {name} is twips, a whole number, not {value!r}")
+                    sys.exit(f"{at}: no attribute {name!r} for w:{el}; {tag} sets {', '.join(PPR_ATTRS[tag])}")
+                if name in ("lineRule", "hRule") and value not in LINE_RULES:
+                    sys.exit(f"{at}: w:{el} {name} is {', '.join(LINE_RULES)}, not {value!r}")
+                if name not in ("lineRule", "hRule") and (not isinstance(value, int) or isinstance(value, bool)):
+                    sys.exit(f"{at}: w:{el} {name} is twips, a whole number, not {value!r}")
                 own[0].setAttribute(f"w:{name}", str(value))
         elif "bullet" in e:
             # A list marker raised by a w:position of its own: LibreOffice draws it as a superscript, a box bullet comes
@@ -472,6 +492,47 @@ def apply(src, edits_path, dst, removed_path):
                 set_text(r, e["para"])
             new.appendChild(r)
             p.parentNode.insertBefore(new, p.nextSibling)
+        elif "checkbox" in e:
+            # A legacy check-box field (FORMCHECKBOX, [chk] in dump): its checked state, default and result are the
+            # client's choice. The field goes whole, from its begin run to its end; a text ☐ in the begin run's format
+            # takes its place, the marker right after it ("" for a box left without one).
+            r = one_run(e, part, rs)
+            at = f"{part} p{e['p']} r{e['r'][0]}"
+            if not isinstance(e["checkbox"], str):
+                sys.exit(f"{at}: checkbox is one tick marker's name, \"\" for none, not {e['checkbox']!r}")
+            if "size" in e and (not isinstance(e["size"], int) or isinstance(e["size"], bool) or e["size"] <= 0):
+                sys.exit(f"{at}: a box's size is half-points, a whole number, not {e['size']!r}")
+            if r.parentNode is None or not any(f.getAttribute("w:fldCharType") == "begin" and f.getElementsByTagName("w:checkBox") for f in elements(r, "w:fldChar")):
+                sys.exit(f"{at}: not the begin run of a check-box field ([chk] in dump)")
+            own = runs(p)
+            field, depth = [], 0
+            for o in own[own.index(r):]:
+                field.append(o)
+                depth += sum({"begin": 1, "end": -1}.get(f.getAttribute("w:fldCharType"), 0) for f in elements(o, "w:fldChar"))
+                if depth == 0:
+                    break
+            if depth:
+                sys.exit(f"{at}: the check-box field doesn't end in its paragraph")
+            for o in field:
+                erase(run_text(o) + "".join(text_of(i) for i in elements(o, "w:instrText")))
+            # The ☐ keeps the run's font and size, not its bold, spacing or scale (a legacy box is a plain square), so the
+            # converted boxes look alike; "size" (half-points) sets another, for a run smaller than the blank's other boxes.
+            # The field's own w:size goes with it: a blank may draw one box at 6 pt and another at 9 pt among 8 pt ones.
+            box = clone_with(r, "☐")
+            for rpr in elements(box, "w:rPr"):
+                box.removeChild(rpr)
+            rpr = box.insertBefore(r.ownerDocument.createElementNS(W, "w:rPr"), box.firstChild)
+            fonts = [f for old in elements(r, "w:rPr") for f in elements(old, "w:rFonts")]
+            if fonts:
+                rpr.appendChild(fonts[0].cloneNode(True))
+            sizes = [str(e["size"])] if "size" in e else [s.getAttribute("w:val") for old in elements(r, "w:rPr") for s in elements(old, "w:sz")]
+            for name in ("w:sz", "w:szCs") if sizes else ():
+                rpr.appendChild(r.ownerDocument.createElementNS(W, name)).setAttribute("w:val", sizes[0])
+            for s in (box, clone_with(box, "{{" + e["checkbox"] + "}}") if e["checkbox"] else None):
+                if s is not None:
+                    r.parentNode.insertBefore(s, r)
+            for o in field:
+                o.parentNode.removeChild(o)
         elif "box" in e:
             r = one_run(e, part, rs)
             at = f"{part} p{e['p']} r{e['r'][0]}"
@@ -494,6 +555,12 @@ def apply(src, edits_path, dst, removed_path):
             r.parentNode.removeChild(r)
         else:
             sys.exit(f"unknown edit {e}")
+
+    # A legacy check-box field left over would keep its checked state in the blank and draw unlike the ☐ boxes.
+    for part in [n for n in z.namelist() if STORY.match(n)]:
+        left = len(doc_of(part).getElementsByTagName("w:checkBox"))
+        if left:
+            sys.exit(f"{part}: {left} legacy check-box field(s) left ([chk] in dump); each becomes ☐ with a \"checkbox\" edit")
 
     # The images the edits name go with the drawings that show them; a photo or a signature is never kept.
     drop = set(spec.get("media", []))
@@ -593,7 +660,8 @@ def apply(src, edits_path, dst, removed_path):
 # where its field goes.
 # B: no marker text. Either way a marker drops the raised/lowered position and letter spacing of the value it replaced,
 # and its paragraph mark drops its position: a lowered empty end of an exact-height line pulls the line's first word
-# down in LibreOffice, and a condensed 1% run comes out narrower than nothing and is not drawn.
+# down in LibreOffice, and a condensed 1% run comes out narrower than nothing and is not drawn. A paragraph that holds
+# only its marker is left-aligned, so the field starts where the line does, not mid-cell.
 def passes(src, a, b):
     z = zipfile.ZipFile(src)
     # The page count Word saved, for make-form to hold LibreOffice's pages against.
@@ -622,6 +690,11 @@ def passes(src, a, b):
                     # Alone in its paragraph, a marker in A takes the paragraph mark's size: B's empty line is as tall
                     # as its mark, and the marker's baseline is then the one the field's text goes on.
                     alone = not any(run_text(o).strip() for o in runs(p) if o is not r)
+                    # Alone, its field starts where the line does: centred, the marker and its field would start mid-cell.
+                    # B's line shows nothing either way. ponytail: a centring from the paragraph's style isn't seen.
+                    for jc in [j for ppr in elements(p, "w:pPr") for j in elements(ppr, "w:jc")] if alone else []:
+                        if jc.getAttribute("w:val") not in ("left", "start", "both"):
+                            jc.setAttribute("w:val", "left")
                     if key == "a" and alone:
                         for el in elements(r, "w:rPr"):
                             r.removeChild(el)

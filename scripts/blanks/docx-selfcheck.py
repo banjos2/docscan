@@ -63,7 +63,7 @@ BODY = [
     p('<w:fldSimple w:instr=" HYPERLINK &quot;mailto:zxqsimple@zxqsimplehost.zxq&quot; ">' + r("strona") + "</w:fldSimple>"),
     # A picture linked from a file outside the package: its path holds a name.
     p(picture('r:link="rId11"')),
-    "<w:tbl><w:tr><w:tc>" + p(r("Ulica: "), r("MARSZAŁKOWSKA 99/12")) + "</w:tc><w:tc>" + p(picture('r:embed="rId9"')) + "</w:tc></w:tr></w:tbl>",
+    '<w:tbl><w:tr><w:trPr><w:trHeight w:val="400" w:hRule="exact"/></w:trPr><w:tc>' + p(r("Ulica: "), r("MARSZAŁKOWSKA 99/12")) + "</w:tc><w:tc>" + p(picture('r:embed="rId9"')) + "</w:tc></w:tr></w:tbl>",
     p(r("{{surname:100x12}}")),
     p(r("Linia pełna do wcięcia"), ppr='<w:pPr><w:ind w:left="105" w:right="2994"/></w:pPr>'),
     # A shape's own name, in wps:cNvPr.
@@ -73,6 +73,21 @@ BODY = [
     # A box a conversion lost: the line starts with spaces, its label in a format of its own.
     p(r("   "), '<w:r><w:rPr><w:b/><w:sz w:val="18"/></w:rPr><w:t>gotówka</w:t></w:r>'),
 ]
+
+
+# A legacy check-box field: begin with its state, the instruction split over two runs, an optional cached result, end.
+def chk(state, result="", rpr='<w:sz w:val="16"/>', size="<w:sizeAuto/>"):
+    return (f'<w:r><w:rPr>{rpr}</w:rPr><w:fldChar w:fldCharType="begin"><w:ffData><w:name w:val="Check1"/>'
+            f'<w:enabled/><w:checkBox>{size}{state}</w:checkBox></w:ffData></w:fldChar></w:r>'
+            + instr(" FORM") + instr("CHECKBOX ") + fld("separate") + result + fld("end"))
+
+
+# p22: one box checked with a ☒ result, one checked by its default in a bold, spaced, scaled run, its field 9 pt;
+# p23: one unchecked in a 7 pt run.
+CHECKBOXES = [p(chk('<w:default w:val="0"/><w:checked/>', r("☒")), r(" Tak "),
+                chk('<w:default w:val="1"/>', rpr='<w:rFonts w:ascii="Times New Roman"/><w:b/><w:spacing w:val="5"/><w:w w:val="93"/><w:sz w:val="16"/>',
+                    size='<w:size w:val="18"/>'), r(" Nie")),
+              p(chk('<w:default w:val="0"/>', rpr='<w:sz w:val="14"/>'), r(" inne"))]
 VALUES = ["KOWALCZYK", "ЯРОСЛАВ", "XZ1234567", "jan.kowalczyk@example.org", "600 123 456", "14-02-1987", "ANNA.NOWAK@example.pl",
           "MARSZAŁKOWSKA", "PIOTR", "WIŚNIEWSKI", "1990", "zxqhyone.zxqhytwo@zxqhyhost.zxq",
           "zxqfieldone.zxqfieldtwo@zxqfieldhost.zxq", "zxqrmone.zxqrmtwo@zxqrmhost.zxq",
@@ -91,8 +106,8 @@ def png(w, h):
     return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0)) + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b"")
 
 
-def build(path, app="<Pages>1</Pages>", extra=None):
-    doc = f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document {NS}><w:body>{"".join(BODY)}<w:sectPr/></w:body></w:document>'
+def build(path, app="<Pages>1</Pages>", extra=None, body=BODY):
+    doc = f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document {NS}><w:body>{"".join(body)}<w:sectPr/></w:body></w:document>'
     rels = "".join(f'<Relationship Id="{i}" Type="{REL}{t}" Target="{g}"' + (f' TargetMode="{m}"' if m else "") + "/>" for i, t, g, m in RELS)
     numbering = (f'<w:numbering {NS}><w:abstractNum w:abstractNumId="0"><w:lvl w:ilvl="0"><w:numFmt w:val="bullet"/>'
                  '<w:rPr><w:b/><w:position w:val="2"/><w:sz w:val="18"/></w:rPr></w:lvl></w:abstractNum>'
@@ -146,13 +161,13 @@ with tempfile.TemporaryDirectory() as tmp:
     check("{{surname:100x12}}" in shown, "dump prints a marker as it is")
 
     # apply: two boxes of one run marked, a paragraph under a numbered label not numbered, a marker inside a run, an
-    # indent loosened, an exact line height made a minimum, authors blanked.
+    # indent loosened, an exact line height made a minimum, a table row made taller, authors blanked.
     with open(edits, "w", encoding="utf-8") as f:
         json.dump({"edits": [{"p": 0, "r": [1], "box": ["answer.no", "answer.yes"]}, {"p": 1, "para": "{{goal:200x12}}"},
                              {"p": 2, "r": [0], "add": "{{who:50x10}}", "after": "Nazwisko /"}, {"p": 18, "ind": {"right": 2794}},
                              {"p": 20, "spacing": {"lineRule": "atLeast"}}, {"p": 21, "r": [0], "replace": " "},
                              {"p": 21, "r": [1], "add": "{{pay.cash}}", "at": "start"}, {"p": 21, "r": [1], "add": "☐", "at": "start"},
-                             {"p": 7, "bullet": {"position": 0}}]}, f)
+                             {"p": 7, "bullet": {"position": 0}}, {"p": 15, "row": {"val": 500}}]}, f)
     out = docx_py("apply", sample, edits, clean, "--removed", removed)
     check(out.returncode == 0, "apply runs" + (f": {out.stderr.strip()[-300:]}" if out.returncode else ""))
     if out.returncode == 0:
@@ -167,6 +182,7 @@ with tempfile.TemporaryDirectory() as tmp:
         check(texts[k - 1:k + 2] == ["1. Nazwisko /", "{{who:50x10}}", " Фамилия: "], f"add after puts the marker inside the run (got {texts[k - 1:k + 2]})")
         check('<w:ind w:left="105" w:right="2794"/>' in xml, "ind changes only the indent it names")
         check('<w:spacing w:before="2" w:line="154" w:lineRule="atLeast"/>' in xml, "spacing changes only the attribute it names")
+        check('<w:trHeight w:val="500" w:hRule="exact"/>' in xml, "row changes only the row height it names")
         check("Zxqshapename" not in xml, "apply blanks a shape's own name")
         last = re.findall(r"<w:p>.*?</w:p>", xml)[-1]
         got = re.findall(r"<w:r>(.*?)<w:t[^>]*>([^<]*)</w:t></w:r>", last)
@@ -183,6 +199,20 @@ with tempfile.TemporaryDirectory() as tmp:
             names = None
         check(names == ["answer.no", "answer.yes", "goal:200x12", "who:50x10", "surname:100x12", "pay.cash"], f"passes prints the markers it wrote (got {names})")
 
+    # passes left-aligns a paragraph that holds only its marker, so the field starts where the line does; a marker after
+    # a label keeps the paragraph's alignment.
+    centred = os.path.join(tmp, "centred.docx")
+    jc = '<w:pPr><w:jc w:val="center"/></w:pPr>'
+    build(centred, body=BODY + [p(r("{{city:80x10}}"), ppr=jc), p(r("Miasto: "), r("{{town:80x10}}"), ppr=jc)])
+    out = docx_py("passes", centred, os.path.join(tmp, "ca.docx"), os.path.join(tmp, "cb.docx"))
+    if out.returncode == 0:
+        for k in ("ca", "cb"):
+            ps = re.findall(r"<w:p>.*?</w:p>", zipfile.ZipFile(os.path.join(tmp, k + ".docx")).read("word/document.xml").decode())
+            got = [re.search(r'<w:jc w:val="(\w+)"/>', x).group(1) for x in ps[-2:]]
+            check(got == ["left", "center"], f"passes {k[1].upper()} left-aligns a marker alone in its paragraph, not one after a label (got {got})")
+    else:
+        check(False, f"passes runs on a centred marker: {out.stderr.strip()[-300:]}")
+
     # passes stops on a blank whose app.xml has no page count.
     build(os.path.join(tmp, "nopages.docx"), app="")
     out = docx_py("passes", os.path.join(tmp, "nopages.docx"), os.path.join(tmp, "a2.docx"), os.path.join(tmp, "b2.docx"))
@@ -198,8 +228,45 @@ with tempfile.TemporaryDirectory() as tmp:
     out = docx_py("apply", sample, pages, os.path.join(tmp, "paged2.docx"), "--removed", removed)
     check(out.returncode != 0 and not os.path.exists(os.path.join(tmp, "paged2.docx")), "apply refuses \"pages\" over Word's own <Pages>")
 
+    # Legacy check-box fields: dump counts the checked ones; apply turns each into a text ☐ with its marker, the field
+    # with its checked state and result gone, and stops while one is left.
+    boxes = os.path.join(tmp, "boxes.docx")
+    build(boxes, body=BODY + CHECKBOXES)
+    said = docx_py("dump", boxes).stdout
+    check(" w:ffData=3 " in said and " checked=2 " in said, "dump counts the legacy boxes and the checked ones")
+    check(re.findall(r"\[chk[^\]]*\]", said) == ["[chk]"] * 3, "dump shows a checked box and an unchecked one alike")
+    with open(edits, "w", encoding="utf-8") as f:
+        json.dump({"edits": [{"p": 22, "r": [0], "checkbox": "q.yes"}, {"p": 22, "r": [7], "checkbox": "q.no"}, {"p": 23, "r": [0], "checkbox": "", "size": 16}]}, f)
+    out = docx_py("apply", boxes, edits, clean, "--removed", removed)
+    check(out.returncode == 0, "apply runs checkbox edits" + (f": {out.stderr.strip()[-300:]}" if out.returncode else ""))
+    if out.returncode == 0:
+        xml = zipfile.ZipFile(clean).read("word/document.xml").decode()
+        ps = re.findall(r"<w:p>.*?</w:p>", xml)
+        check(not re.search(r"ffData|checkBox|w:checked|w:default", xml) and not re.search(r"FORMCHECKBOX|fldChar|☒", "".join(ps[22:])),
+              "checkbox leaves no field, checked state or result")
+        got = [re.findall(r"<w:r>(.*?)<w:t[^>]*>([^<]*)</w:t></w:r>", x) for x in ps[22:24]]
+        sz = '<w:rPr><w:sz w:val="16"/><w:szCs w:val="16"/></w:rPr>'
+        tnr = '<w:rPr><w:rFonts w:ascii="Times New Roman"/><w:sz w:val="16"/><w:szCs w:val="16"/></w:rPr>'
+        check(got == [[(sz, "☐"), (sz, "{{q.yes}}"), ("", " Tak "), (tnr, "☐"), (tnr, "{{q.no}}"), ("", " Nie")], [(sz, "☐"), ("", " inne")]],
+              f"checkbox puts ☐ in the run's font and size (or its \"size\"), no bold, spacing, scale or field size, its marker after it (got {got})")
+        check(" w:ffData=0 " in docx_py("dump", clean).stdout and " checked=0 " in docx_py("dump", clean).stdout, "dump of the clean blank counts no legacy box")
+    with open(edits, "w", encoding="utf-8") as f:
+        json.dump({"edits": [{"p": 22, "r": [0], "checkbox": "q.yes"}, {"p": 22, "r": [7], "checkbox": "q.no"}]}, f)
+    left = os.path.join(tmp, "left.docx")
+    out = docx_py("apply", boxes, edits, left, "--removed", removed)
+    check(out.returncode != 0 and "1 legacy check-box field(s) left" in out.stderr and not os.path.exists(left), "apply stops while a legacy check-box field is left")
+    unended = os.path.join(tmp, "unended.docx")
+    build(unended, body=BODY + [p(chk("<w:checked/>").rsplit("<w:r>", 1)[0])])
+
     # A wrong edit stops apply with its place named, before anything is written.
-    for i, (edit, says) in enumerate([({"p": 3, "ind": {"right": 100}}, "p3: no w:ind"),
+    for i, (src, edit, says) in enumerate([(boxes, {"p": 22, "r": [6], "checkbox": "q.x"}, "p22 r6: not the begin run of a check-box field"),
+                       (boxes, {"p": 22, "r": [1], "checkbox": "q.x"}, "p22 r1: not the begin run of a check-box field"),
+                       (boxes, {"p": 22, "r": [0, 7], "checkbox": "q.x"}, "p22 r[0, 7]: one run"),
+                       (boxes, {"p": 22, "r": [0], "checkbox": ["q.x"]}, "p22 r0: checkbox is one tick marker's name"),
+                       (boxes, {"p": 22, "r": [0], "checkbox": "q.x", "size": "16"}, "p22 r0: a box's size is half-points"),
+                       (boxes, {"p": 22, "r": [0], "checkbox": "q.x", "size": 0}, "p22 r0: a box's size is half-points"),
+                       (unended, {"p": 22, "r": [0], "checkbox": "q.x"}, "p22 r0: the check-box field doesn't end in its paragraph")]
+                      + [(sample, *x) for x in [({"p": 3, "ind": {"right": 100}}, "p3: no w:ind"),
                        ({"p": 18, "ind": {"rigth": 100}}, "p18: no attribute 'rigth'"),
                        ({"p": 18, "ind": {"right": "wide"}}, "p18: w:ind right"),
                        ({"p": 3, "spacing": {"line": 240}}, "p3: no w:spacing"),
@@ -212,11 +279,15 @@ with tempfile.TemporaryDirectory() as tmp:
                        ({"p": 3, "bullet": {"position": 0}}, "p3: no w:position in the list level"),
                        ({"p": 1, "bullet": {"position": 0}}, "p1: no w:position in the list level"),
                        ({"p": 7, "bullet": {"size": 18}}, "p7: no attribute 'size'"),
-                       ({"p": 7, "bullet": {"position": "0"}}, "p7: a list marker's position is half-points")]):
+                       ({"p": 7, "bullet": {"position": "0"}}, "p7: a list marker's position is half-points"),
+                       ({"p": 3, "row": {"val": 500}}, "p3: no w:trHeight"),
+                       ({"p": 15, "row": {"height": 500}}, "p15: no attribute 'height'"),
+                       ({"p": 15, "row": {"hRule": "fixed"}}, "p15: w:trHeight hRule"),
+                       ({"p": 15, "row": {"val": "500"}}, "p15: w:trHeight val is twips")]]):
         with open(edits, "w", encoding="utf-8") as f:
             json.dump({"edits": [edit]}, f)
         bad = os.path.join(tmp, f"wrong{i}.docx")
-        out = docx_py("apply", sample, edits, bad, "--removed", removed)
+        out = docx_py("apply", src, edits, bad, "--removed", removed)
         check(out.returncode != 0 and says in out.stderr and "Traceback" not in out.stderr and not os.path.exists(bad),
               f"apply stops on {json.dumps(edit, ensure_ascii=False)} with {says!r}" + (f" (said {out.stderr.strip()[-200:]!r})" if says not in out.stderr else ""))
 
