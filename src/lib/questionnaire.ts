@@ -12,7 +12,8 @@ import type { CellSpec } from "./print"
 // A checkbox by its field name, or the widget of a radio group whose appearance on-name is `on`.
 export type Tick = string | { radio: string; on: string }
 // One PDF form in public/. text: PDF text field name → what it prints. ticks: tick key → the box that shows it.
-// Tick keys: `${ChoiceKey}.${option}`, `means.${payer}.${option}`, and "sponsorOther" (ticked with a printed sponsorWho).
+// Tick keys: `${ChoiceKey}.${option}`, `means.${payer}.${option}`, and "sponsorOther", ticked when the sponsor is named
+// (bg ticks it with no line for the name: the form says so under the field).
 export type Blank = { file: string; text: Record<string, CellSpec>; ticks: Record<string, Tick> }
 // One visa type: its blank, the country whose cities it lists, the items it has with their numbers, what choosing it presets.
 export type Questionnaire = { id: string; label: string; country: CountryCode; blank: Blank; items: Items; presets: Partial<Values> }
@@ -87,6 +88,9 @@ export function itemsNote(numbers: number[]): string {
   const lo = Math.min(...numbers), hi = Math.max(...numbers)
   return lo === hi ? `Пункт ${lo}` : `Пункты ${lo}–${hi}`
 }
+
+// Whether the blank has a cell that prints this key.
+export const prints = (blank: Blank, key: string) => Object.values(blank.text).some((spec) => spec.split("+").includes(key))
 
 // The options of a choice that the blank has a box for.
 export const offered = <T extends Record<string, string>>(blank: Blank, group: string, options: T): Partial<T> =>

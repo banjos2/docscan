@@ -1,8 +1,8 @@
 import { expect, test } from "vitest"
-import { ITEM_OF, MEANS, OPTIONS, type Items } from "./anketa"
+import { ITEM_OF, MEANS, OPTIONS, type Items, type Values } from "./anketa"
 import { PL_D } from "./blanks/pl-d"
-import { PRINT_KEYS } from "./print"
-import { applyQuestionnaire, inItemOrder, itemLabel, itemNumber, itemsNote, NUMBERING_A, NUMBERING_B, NUMBERING_D, offered, QUESTIONNAIRES } from "./questionnaire"
+import { PRINT_KEYS, type PrintKey } from "./print"
+import { applyQuestionnaire, inItemOrder, itemLabel, itemNumber, itemsNote, NUMBERING_A, NUMBERING_B, NUMBERING_D, offered, prints, QUESTIONNAIRES } from "./questionnaire"
 import { SPECIMEN } from "./specimen"
 
 const Q = (id: string) => QUESTIONNAIRES.find((q) => q.id === id)!
@@ -67,4 +67,14 @@ test("every blank names only real print keys and real options", () => {
     for (const spec of Object.values(blank.text)) for (const k of spec.split("+")) expect(PRINT_KEYS).toContain(k)
     for (const key of Object.keys(blank.ticks)) expect(isTickKey(key)).toBe(true)
   }
+})
+
+test("every field the form can show prints on its questionnaire's blank, but Болгария's sponsor, which has no line", () => {
+  // The form's fields that are print keys themselves, on the questionnaires that have their item.
+  const fields = PRINT_KEYS.filter((k): k is PrintKey & keyof Values => k in SPECIMEN)
+  const unprinted = QUESTIONNAIRES.flatMap((q) =>
+    fields.filter((k) => (!ITEM_OF[k] || ITEM_OF[k] in q.items) && !prints(q.blank, k)).map((k) => `${q.id} ${k}`))
+  expect(unprinted).toEqual(["bg sponsorWho"])
+  // A cell of two keys prints both.
+  expect([prints(PL_D, "hostEmail"), prints(PL_D, "destination")]).toEqual([true, false])
 })

@@ -8,8 +8,8 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ACTUAL_ADDRESS, EMPLOYMENT, HOST_KIND, ITEM_OF, MEANS, OPTIONS, SCHENGEN, visible, type ChoiceKey, type Source, type Sources, type TextKey, type Values } from "@/lib/anketa"
 import { CITIES } from "@/lib/cities"
-import { printedText, type PrintKey } from "@/lib/print"
-import { inItemOrder, itemLabel, itemNumber, itemsNote, offered, QUESTIONNAIRES, type Questionnaire } from "@/lib/questionnaire"
+import { PRINT_KEYS, printedText, type PrintKey } from "@/lib/print"
+import { inItemOrder, itemLabel, itemNumber, itemsNote, offered, prints, QUESTIONNAIRES, type Questionnaire } from "@/lib/questionnaire"
 import { cn } from "@/lib/utils"
 import type { Errors } from "@/lib/validate"
 
@@ -295,7 +295,9 @@ function FieldRow({
   const errorId = error ? `${id}-error` : undefined
   const hint = f.hint && printed[f.hint]
   const hintId = hint ? `${id}-hint` : undefined
-  const describedBy = [hintId, errorId].filter(Boolean).join(" ") || undefined
+  // A value the blank has no line for: what the form shows would not reach the PDF (Болгария's sponsor).
+  const unprintedId = (PRINT_KEYS as readonly string[]).includes(f.key) && !prints(questionnaire.blank, f.key) ? `${id}-unprinted` : undefined
+  const describedBy = [hintId, unprintedId, errorId].filter(Boolean).join(" ") || undefined
   let control: ReactNode
   if (f.type === "select") {
     control = (
@@ -361,6 +363,11 @@ function FieldRow({
       {hint && (
         <p id={hintId} className="text-xs text-muted-foreground">
           в анкете: {hint}
+        </p>
+      )}
+      {unprintedId && (
+        <p id={unprintedId} className="text-xs text-muted-foreground">
+          В этом бланке для этого поля нет строки: в PDF оно не печатается.
         </p>
       )}
       {error && (
