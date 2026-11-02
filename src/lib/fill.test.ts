@@ -76,11 +76,13 @@ test("a one-row box the form marks multiline is filled as one line, a taller one
 const previewFits = (text: string, box: { width: number; height: number }, size: number, font: PDFFont) =>
   previewLines(text, box.width, size, font) * Math.round(1.2 * size) <= box.height - 6
 
-test("lines are counted as Preview wraps them: after hyphens and through a word wider than the line", async () => {
+test("lines are counted as Preview wraps them: after hyphens, through a word wider than the line, not before a comma", async () => {
   const font = await (await PDFDocument.create()).embedFont(StandardFonts.Helvetica)
   // Line counts PDFKit drew at 10 pt in boxes 92 and 143 pt wide; pdf-lib's own layout makes each one line.
   expect(previewLines("PRZEDSIEBIORSTWOPRODUKCYJNOHANDLOWEBUDMEX SP. Z O.O.", 92, 10, font)).toBe(5)
   expect(previewLines("KOWALSKA-NOWAKOWSKA-WISNIEWSKA DOROTA, UL. FABRYCZNA/POLNA 7-9", 143, 10, font)).toBe(4)
+  // A stray " , " or " ; " stays with the word before it, spaces and all: PDFKit drew 6 lines in 93.2 pt.
+  expect(previewLines("Sp. z o.o. , ul. Polna 5 , Warszawa ; Poland . Lorem ipsum dolor sit amet", 93.2, 10, font)).toBe(6)
 })
 
 test("item 31's contact with a hyphenated e-mail goes down to the size at which Preview shows all its lines", async () => {

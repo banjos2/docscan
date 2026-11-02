@@ -85,11 +85,12 @@ function keyText(key: PrintKey, v: Values, q: Questionnaire): string {
   return field === "email" || field === "hostEmail" || field === "orgEmail" ? text : text.toUpperCase()
 }
 
-// What the blank prints for each key: capitals except e-mail, dates as dd-mm-yyyy, nothing for empty.
+// What the blank prints for each key: capitals except e-mail, dates as dd-mm-yyyy, nothing for empty. A pasted tab is
+// a space and a CR or CRLF a plain line end: the PDF's font has no tab, and Preview's wrapping knows only "\n".
 export function printedText(v: Values, q: Questionnaire): Partial<Record<PrintKey, string>> {
   const out: Partial<Record<PrintKey, string>> = {}
   for (const key of PRINT_KEYS) {
-    const text = keyText(key, v, q)
+    const text = keyText(key, v, q).replace(/\r\n?/g, "\n").replaceAll("\t", " ")
     if (text) out[key] = text
   }
   return out

@@ -64,6 +64,11 @@ test("the employer joins name, address and phone, never the e-mail, and is left 
   expect(printedText({ ...SPECIMEN, ...job, employment: "pensioner" }, Q("pl-guest-d"))).not.toHaveProperty("employer")
 })
 
+test("a pasted tab prints as a space and a Windows or old Mac line end as a plain one", () => {
+  const job = { employment: "employed", employerName: "Poltrans\tSp. z o.o.", employerAddress: "ul. Polna 7\r\n62-800 Kalisz\rPoland", employerPhone: "" }
+  expect(printedText({ ...SPECIMEN, ...job }, Q("pl-guest-d")).employer).toBe("POLTRANS SP. Z O.O., UL. POLNA 7\n62-800 KALISZ\nPOLAND")
+})
+
 test("item 25 counts the days of the stay, arrival and departure included", () => {
   expect(stayDays("2026-11-02", "2026-11-16")).toBe("15")
   expect(stayDays("2026-11-16", "2026-11-02")).toBe("")
