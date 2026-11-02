@@ -1,5 +1,6 @@
 import type { Item, Items, Values } from "./anketa"
 import { BG } from "./blanks/bg"
+import gr from "./blanks/gr.fields"
 import hu from "./blanks/hu.fields"
 import plC from "./blanks/pl-c.fields"
 import { PL_D } from "./blanks/pl-d"
@@ -44,6 +45,7 @@ export const QUESTIONNAIRES: Questionnaire[] = [
   { id: "pl-work", label: "Польша рабочая", country: "PL", blank: PL_D, items: { ...NUMBERING_D, basis: 21, workPermit: 34 }, presets: { purpose: "other", basis: "PRACA" } },
   { id: "bg", label: "Болгария", country: "BG", blank: BG, items: NUMBERING_B, presets: { purpose: "tourism", hostKind: "hotel" } },
   { id: "hu", label: "Венгрия тур", country: "HU", blank: fromFields("blanks/hu.pdf", hu), items: NUMBERING_A, presets: { purpose: "tourism", hostKind: "hotel" } },
+  { id: "gr", label: "Греция тур", country: "GR", blank: fromFields("blanks/gr.pdf", gr), items: NUMBERING_B, presets: { purpose: "tourism", hostKind: "hotel" } },
 ]
 
 // The new questionnaire's presets over the data. The city goes only when the list of cities changes with the country.

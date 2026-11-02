@@ -70,6 +70,8 @@ BODY = [
     p('<w:r><w:drawing><wp:anchor><wp:extent cx="381000" cy="254000"/><wp:docPr id="3" name="Zxqshapename 2"/><a:graphic><a:graphicData>'
       '<wps:wsp><wps:cNvPr id="3" name="Zxqshapename 2"/></wps:wsp></a:graphicData></a:graphic></wp:anchor></w:drawing></w:r>'),
     p(r("Linia ścisła"), ppr='<w:pPr><w:spacing w:before="2" w:line="154" w:lineRule="exact"/></w:pPr>'),
+    # A box a conversion lost: the line starts with spaces, its label in a format of its own.
+    p(r("   "), '<w:r><w:rPr><w:b/><w:sz w:val="18"/></w:rPr><w:t>gotówka</w:t></w:r>'),
 ]
 VALUES = ["KOWALCZYK", "ЯРОСЛАВ", "XZ1234567", "jan.kowalczyk@example.org", "600 123 456", "14-02-1987", "ANNA.NOWAK@example.pl",
           "MARSZAŁKOWSKA", "PIOTR", "WIŚNIEWSKI", "1990", "zxqhyone.zxqhytwo@zxqhyhost.zxq",
@@ -92,7 +94,8 @@ def png(w, h):
 def build(path, app="<Pages>1</Pages>", extra=None):
     doc = f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document {NS}><w:body>{"".join(BODY)}<w:sectPr/></w:body></w:document>'
     rels = "".join(f'<Relationship Id="{i}" Type="{REL}{t}" Target="{g}"' + (f' TargetMode="{m}"' if m else "") + "/>" for i, t, g, m in RELS)
-    numbering = (f'<w:numbering {NS}><w:abstractNum w:abstractNumId="0"><w:lvl w:ilvl="0"><w:numFmt w:val="bullet"/></w:lvl></w:abstractNum>'
+    numbering = (f'<w:numbering {NS}><w:abstractNum w:abstractNumId="0"><w:lvl w:ilvl="0"><w:numFmt w:val="bullet"/>'
+                 '<w:rPr><w:b/><w:position w:val="2"/><w:sz w:val="18"/></w:rPr></w:lvl></w:abstractNum>'
                  '<w:abstractNum w:abstractNumId="1"><w:lvl w:ilvl="0"><w:numFmt w:val="decimal"/></w:lvl></w:abstractNum>'
                  '<w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num><w:num w:numId="2"><w:abstractNumId w:val="1"/></w:num></w:numbering>')
     parts = {
@@ -147,7 +150,9 @@ with tempfile.TemporaryDirectory() as tmp:
     with open(edits, "w", encoding="utf-8") as f:
         json.dump({"edits": [{"p": 0, "r": [1], "box": ["answer.no", "answer.yes"]}, {"p": 1, "para": "{{goal:200x12}}"},
                              {"p": 2, "r": [0], "add": "{{who:50x10}}", "after": "Nazwisko /"}, {"p": 18, "ind": {"right": 2794}},
-                             {"p": 20, "spacing": {"lineRule": "atLeast"}}]}, f)
+                             {"p": 20, "spacing": {"lineRule": "atLeast"}}, {"p": 21, "r": [0], "replace": " "},
+                             {"p": 21, "r": [1], "add": "{{pay.cash}}", "at": "start"}, {"p": 21, "r": [1], "add": "☐", "at": "start"},
+                             {"p": 7, "bullet": {"position": 0}}]}, f)
     out = docx_py("apply", sample, edits, clean, "--removed", removed)
     check(out.returncode == 0, "apply runs" + (f": {out.stderr.strip()[-300:]}" if out.returncode else ""))
     if out.returncode == 0:
@@ -163,6 +168,12 @@ with tempfile.TemporaryDirectory() as tmp:
         check('<w:ind w:left="105" w:right="2794"/>' in xml, "ind changes only the indent it names")
         check('<w:spacing w:before="2" w:line="154" w:lineRule="atLeast"/>' in xml, "spacing changes only the attribute it names")
         check("Zxqshapename" not in xml, "apply blanks a shape's own name")
+        last = re.findall(r"<w:p>.*?</w:p>", xml)[-1]
+        got = re.findall(r"<w:r>(.*?)<w:t[^>]*>([^<]*)</w:t></w:r>", last)
+        bold = '<w:rPr><w:b/><w:sz w:val="18"/></w:rPr>'
+        check(got == [(bold, "☐"), (bold, "{{pay.cash}}"), ("", " "), (bold, "gotówka")], f"add with r alone takes that run's format at the start (got {got})")
+        lvl = re.search(r"<w:rPr>.*?</w:rPr>", z.read("word/numbering.xml").decode())
+        check(lvl and lvl.group() == '<w:rPr><w:b/><w:position w:val="0"/><w:sz w:val="18"/></w:rPr>', f"bullet changes only its list level's position (got {lvl and lvl.group()})")
         out = docx_py("passes", clean, os.path.join(tmp, "a.docx"), os.path.join(tmp, "b.docx"))
         said = dict(l.split(" ", 1) for l in out.stdout.splitlines() if " " in l)
         check(out.returncode == 0 and "word" in said, "passes runs and prints the page count")
@@ -170,7 +181,7 @@ with tempfile.TemporaryDirectory() as tmp:
             names = json.loads(said.get("markers", "null"))
         except ValueError:
             names = None
-        check(names == ["answer.no", "answer.yes", "goal:200x12", "who:50x10", "surname:100x12"], f"passes prints the markers it wrote (got {names})")
+        check(names == ["answer.no", "answer.yes", "goal:200x12", "who:50x10", "surname:100x12", "pay.cash"], f"passes prints the markers it wrote (got {names})")
 
     # passes stops on a blank whose app.xml has no page count.
     build(os.path.join(tmp, "nopages.docx"), app="")
@@ -196,7 +207,12 @@ with tempfile.TemporaryDirectory() as tmp:
                        ({"p": 20, "spacing": {"lineRule": "exactly"}}, "p20: w:spacing lineRule"),
                        ({"p": 2, "r": [0], "add": "{{x:10x10}}", "after": "Zxqnowhere"}, "p2 r0: no 'Zxqnowhere'"),
                        ({"p": 2, "r": [0, 1], "add": "{{x:10x10}}", "after": "Nazwisko"}, "p2 r[0, 1]: one run"),
-                       ({"p": 0, "r": [0, 1], "box": "answer.no"}, "p0 r[0, 1]: one run")]):
+                       ({"p": 0, "r": [0, 1], "box": "answer.no"}, "p0 r[0, 1]: one run"),
+                       ({"p": 21, "r": [0, 1], "add": "☐", "at": "start"}, "p21 r[0, 1]: one run"),
+                       ({"p": 3, "bullet": {"position": 0}}, "p3: no w:position in the list level"),
+                       ({"p": 1, "bullet": {"position": 0}}, "p1: no w:position in the list level"),
+                       ({"p": 7, "bullet": {"size": 18}}, "p7: no attribute 'size'"),
+                       ({"p": 7, "bullet": {"position": "0"}}, "p7: a list marker's position is half-points")]):
         with open(edits, "w", encoding="utf-8") as f:
             json.dump({"edits": [edit]}, f)
         bad = os.path.join(tmp, f"wrong{i}.docx")

@@ -17,12 +17,16 @@ replace: the runs' text goes, the first run holds the marker in its own format. 
 and drawings (a tick drawn over a box), keep tabs and breaks. box: the run's box glyph gets the marker right after it;
 a run with several boxes takes a list, "box": ["q.no", "q.yes"], one marker per box in order ("" for a box left out).
 add: a marker run at the start or the end of a paragraph that has no value; with "r" and "after", inside that run right
-after the text "after" (a label and the next heading printed in one run). para: a paragraph of its own right after
-the label's, for a field below a label that has no empty line under it. ind: the paragraph's w:ind attributes
-(left, right, start, end, firstLine, hanging) in twips, a little more room for a line full to its indent whose last
-word the markers of pass A would push to the next line (B must keep its breaks: check the render). spacing: its
+after the text "after" (a label and the next heading printed in one run); with "r" alone, at the start or the end but in
+that run's format (a box a conversion lost: "add": "□" before its marker, set like the label's words). para: a
+paragraph of its own right after the label's, for a field below a label that has no empty line under it. ind: the
+paragraph's w:ind attributes (left, right, start, end, firstLine, hanging) in twips, a little more room for a line full
+to its indent whose last word the markers of pass A would push to the next line (B must keep its breaks: check the
+render), or a restored box moved off its column's rule. spacing: its
 w:spacing attributes (before, after, line in twips; lineRule auto, exact or atLeast), atLeast for an exact line
-height lower than its text, which the converter clips at the top. media: images to drop with their drawings.
+height lower than its text, which the converter clips at the top. bullet: {"position": 0} for the list level of the
+paragraph p whose marker has a w:position of its own, which the converter draws as a tiny superscript box (the level
+is shared: every paragraph of that list changes). media: images to drop with their drawings.
 pages: only for a sample whose docProps/app.xml has no <Pages> (Word never saved it): the page count for make-form.
 apply also blanks every author and initials, and refuses a sample with comments, people.xml or a glossary.
 After any change here: python3 -I scripts/blanks/docx-selfcheck.py
@@ -189,11 +193,12 @@ def where(p, tables):
     return f" [t{tables.index(tbl)} r{elements(tbl, 'w:tr').index(tr)} c{elements(tr, 'w:tc').index(tc)}]"
 
 
-# The list level a paragraph's own numbering points at, None for a paragraph that isn't in a list.
-def levels(z):
+# The list level a paragraph's own numbering points at, None for a paragraph that isn't in a list; in doc, the parsed
+# numbering apply edits, if given.
+def levels(z, doc=None):
     if "word/numbering.xml" not in z.namelist():
         return lambda p: None
-    doc = minidom.parseString(z.read("word/numbering.xml"))
+    doc = doc or minidom.parseString(z.read("word/numbering.xml"))
     abstract = {a.getAttribute("w:abstractNumId"): a for a in doc.getElementsByTagName("w:abstractNum")}
     nums = {n.getAttribute("w:numId"): elements(n, "w:abstractNumId")[0].getAttribute("w:val") for n in doc.getElementsByTagName("w:num")}
 
@@ -396,7 +401,8 @@ def apply(src, edits_path, dst, removed_path):
                         r.removeChild(el)
         elif "ind" in e or "spacing" in e:
             # ind: a line full to its indent, which the markers of pass A would push the last word off: a little more
-            # room; B keeps its line breaks while the room added is less than the next word (check the render).
+            # room; B keeps its line breaks while the room added is less than the next word (check the render). Also a
+            # line whose restored box would sit on its column's rule: the indent of the column's list markers.
             # spacing: an exact line height lower than its text, which the converter clips at the top: atLeast.
             tag = "ind" if "ind" in e else "spacing"
             at = f"{part} p{e['p']}"
@@ -411,6 +417,20 @@ def apply(src, edits_path, dst, removed_path):
                 if name != "lineRule" and (not isinstance(value, int) or isinstance(value, bool)):
                     sys.exit(f"{at}: w:{tag} {name} is twips, a whole number, not {value!r}")
                 own[0].setAttribute(f"w:{name}", str(value))
+        elif "bullet" in e:
+            # A list marker raised by a w:position of its own: LibreOffice draws it as a superscript, a box bullet comes
+            # out at 58 % of its size above the line. Position 0 puts it on the line at its own size.
+            at = f"{part} p{e['p']}"
+            lvl = levels(z, doc_of("word/numbering.xml") if "word/numbering.xml" in z.namelist() else None)(p)
+            own = [i for rpr in elements(lvl, "w:rPr") for i in elements(rpr, "w:position")] if lvl is not None else []
+            if not own:
+                sys.exit(f"{at}: no w:position in the list level of this paragraph")
+            for name, value in e["bullet"].items():
+                if name != "position":
+                    sys.exit(f"{at}: no attribute {name!r} for a list marker; bullet sets position")
+                if not isinstance(value, int) or isinstance(value, bool):
+                    sys.exit(f"{at}: a list marker's position is half-points, a whole number, not {value!r}")
+                own[0].setAttribute("w:val", str(value))
         elif "add" in e and "after" in e:
             # A marker inside a run, right after its text "after": a label and the next heading printed in one run.
             r = one_run(e, part, rs)
@@ -424,12 +444,15 @@ def apply(src, edits_path, dst, removed_path):
                     r.parentNode.insertBefore(clone_with(r, s), r)
             r.parentNode.removeChild(r)
         elif "add" in e:
-            # A marker where the sample has no value: a run of its own at the start or the end of the paragraph.
+            # A marker where the sample has no value: a run of its own at the start or the end of the paragraph, in the
+            # format of the run next to it, or with "r" of that run (a box the conversion lost, set like the label's words).
             own = runs(p)
             near = (own[0] if e.get("at") == "start" else own[-1]) if own else None
-            r = clone_with(near, e["add"]) if near is not None else p.ownerDocument.createElementNS(W, "w:r")
-            if near is None:
+            like = one_run(e, part, rs) if "r" in e else near
+            r = clone_with(like, e["add"]) if like is not None else p.ownerDocument.createElementNS(W, "w:r")
+            if like is None:
                 set_text(r, e["add"])
+            if near is None:
                 p.appendChild(r)
             elif e.get("at") == "start":
                 near.parentNode.insertBefore(r, near)
