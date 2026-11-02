@@ -14,7 +14,7 @@ edits.json: {"edits": [{"part": "word/document.xml", "p": 12, "r": [3, 4], "repl
                        {"p": 70, "r": [0], "checkbox": "sex.M"}, {"p": 71, "r": [0], "checkbox": "", "size": 16},
                        {"p": 80, "row": {"val": 1009}}],
              "media": ["word/media/image2.jpeg"], "pages": 4}
-p and r are the paragraph and run numbers dump prints; "part" defaults to word/document.xml.
+p and r are the paragraph and run numbers dump prints; "part" defaults to word/document.xml. One kind per edit.
 replace: the runs' text goes, the first run holds the marker in its own format. clear: the runs lose text, field codes
 and drawings (a tick drawn over a box), keep tabs and breaks. box: the run's box glyph gets the marker right after it;
 a run with several boxes takes a list, "box": ["q.no", "q.yes"], one marker per box in order ("" for a box left out).
@@ -358,6 +358,8 @@ def clone_with(run, text):
 PPR_ATTRS = {"ind": ("left", "right", "start", "end", "firstLine", "hanging"), "spacing": ("before", "after", "line", "lineRule"),
              "row": ("val", "hRule")}
 LINE_RULES = ("auto", "exact", "atLeast")
+# The edit kinds, one per edit; "after", "at", "size", "part", "p" and "r" go with them.
+EDIT_KINDS = ("replace", "clear", "ind", "spacing", "row", "bullet", "add", "para", "checkbox", "box")
 
 
 def one_run(e, part, rs):
@@ -390,6 +392,10 @@ def apply(src, edits_path, dst, removed_path):
     resolved = []
     for e in spec.get("edits", []):
         part = e.get("part", "word/document.xml")
+        # One kind each: apply would carry out the first and drop the rest without a word.
+        kinds = [k for k in EDIT_KINDS if k in e]
+        if len(kinds) > 1:
+            sys.exit(f"{part} p{e.get('p')}: one kind per edit, not {' and '.join(kinds)}")
         ps = list(paragraphs(doc_of(part)))
         rs = runs(ps[e["p"]])
         resolved.append((e, part, ps[e["p"]], [rs[i] for i in e.get("r", [])]))
@@ -436,6 +442,8 @@ def apply(src, edits_path, dst, removed_path):
                     sys.exit(f"{at}: w:{el} {name} is {', '.join(LINE_RULES)}, not {value!r}")
                 if name not in ("lineRule", "hRule") and (not isinstance(value, int) or isinstance(value, bool)):
                     sys.exit(f"{at}: w:{el} {name} is twips, a whole number, not {value!r}")
+                if tag == "row" and name == "val" and value <= 0:
+                    sys.exit(f"{at}: a row's height is above 0 twips, not {value!r}")
                 own[0].setAttribute(f"w:{name}", str(value))
         elif "bullet" in e:
             # A list marker raised by a w:position of its own: LibreOffice draws it as a superscript, a box bullet comes

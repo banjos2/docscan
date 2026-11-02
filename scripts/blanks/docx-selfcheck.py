@@ -283,7 +283,9 @@ with tempfile.TemporaryDirectory() as tmp:
                        ({"p": 3, "row": {"val": 500}}, "p3: no w:trHeight"),
                        ({"p": 15, "row": {"height": 500}}, "p15: no attribute 'height'"),
                        ({"p": 15, "row": {"hRule": "fixed"}}, "p15: w:trHeight hRule"),
-                       ({"p": 15, "row": {"val": "500"}}, "p15: w:trHeight val is twips")]]):
+                       ({"p": 15, "row": {"val": "500"}}, "p15: w:trHeight val is twips"),
+                       ({"p": 15, "row": {"val": 0}}, "p15: a row's height is above 0 twips"),
+                       ({"p": 18, "ind": {"right": 100}, "spacing": {"line": 240}}, "p18: one kind per edit, not ind and spacing")]]):
         with open(edits, "w", encoding="utf-8") as f:
             json.dump({"edits": [edit]}, f)
         bad = os.path.join(tmp, f"wrong{i}.docx")
