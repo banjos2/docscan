@@ -3,6 +3,7 @@ Run it after any change to docx.py:  python3 -I scripts/blanks/docx-selfcheck.py
 Every name, number and address below is invented."""
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -13,7 +14,8 @@ NS = ('xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
       'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" '
       'xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" '
       'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" '
-      'xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"')
+      'xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture" '
+      'xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape"')
 REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/"
 
 
@@ -63,6 +65,10 @@ BODY = [
     p(picture('r:link="rId11"')),
     "<w:tbl><w:tr><w:tc>" + p(r("Ulica: "), r("MARSZAŁKOWSKA 99/12")) + "</w:tc><w:tc>" + p(picture('r:embed="rId9"')) + "</w:tc></w:tr></w:tbl>",
     p(r("{{surname:100x12}}")),
+    p(r("Linia pełna do wcięcia"), ppr='<w:pPr><w:ind w:left="105" w:right="2994"/></w:pPr>'),
+    # A shape's own name, in wps:cNvPr.
+    p('<w:r><w:drawing><wp:anchor><wp:extent cx="381000" cy="254000"/><wp:docPr id="3" name="Zxqshapename 2"/><a:graphic><a:graphicData>'
+      '<wps:wsp><wps:cNvPr id="3" name="Zxqshapename 2"/></wps:wsp></a:graphicData></a:graphic></wp:anchor></w:drawing></w:r>'),
 ]
 VALUES = ["KOWALCZYK", "ЯРОСЛАВ", "XZ1234567", "jan.kowalczyk@example.org", "600 123 456", "14-02-1987", "ANNA.NOWAK@example.pl",
           "MARSZAŁKOWSKA", "PIOTR", "WIŚNIEWSKI", "1990", "zxqhyone.zxqhytwo@zxqhyhost.zxq",
@@ -135,9 +141,11 @@ with tempfile.TemporaryDirectory() as tmp:
         check(not pieces, f"dump masks {v[:3]}…" + (f" (shows {pieces})" if pieces else ""))
     check("{{surname:100x12}}" in shown, "dump prints a marker as it is")
 
-    # apply: two boxes of one run marked, a paragraph under a numbered label not numbered, authors blanked.
+    # apply: two boxes of one run marked, a paragraph under a numbered label not numbered, a marker inside a run, an
+    # indent loosened, authors blanked.
     with open(edits, "w", encoding="utf-8") as f:
-        json.dump({"edits": [{"p": 0, "r": [1], "box": ["answer.no", "answer.yes"]}, {"p": 1, "para": "{{goal:200x12}}"}]}, f)
+        json.dump({"edits": [{"p": 0, "r": [1], "box": ["answer.no", "answer.yes"]}, {"p": 1, "para": "{{goal:200x12}}"},
+                             {"p": 2, "r": [0], "add": "{{who:50x10}}", "after": "Nazwisko /"}, {"p": 18, "ind": {"right": 2794}}]}, f)
     out = docx_py("apply", sample, edits, clean, "--removed", removed)
     check(out.returncode == 0, "apply runs" + (f": {out.stderr.strip()[-300:]}" if out.returncode else ""))
     if out.returncode == 0:
@@ -147,6 +155,11 @@ with tempfile.TemporaryDirectory() as tmp:
         check('w:initials="ZT"' not in xml, "apply blanks every author's initials")
         goal = xml[xml.rfind("<w:p>", 0, xml.find("{{goal:200x12}}")):xml.find("{{goal:200x12}}")]
         check("{{goal:200x12}}" in xml and "w:numPr" not in goal, "para leaves the label's numbering out")
+        texts = re.findall(r"<w:t[^>]*>([^<]*)</w:t>", xml)
+        k = texts.index("{{who:50x10}}") if "{{who:50x10}}" in texts else 0
+        check(texts[k - 1:k + 2] == ["1. Nazwisko /", "{{who:50x10}}", " Фамилия: "], f"add after puts the marker inside the run (got {texts[k - 1:k + 2]})")
+        check('<w:ind w:left="105" w:right="2794"/>' in xml, "ind changes only the indent it names")
+        check("Zxqshapename" not in xml, "apply blanks a shape's own name")
         out = docx_py("passes", clean, os.path.join(tmp, "a.docx"), os.path.join(tmp, "b.docx"))
         said = dict(l.split(" ", 1) for l in out.stdout.splitlines() if " " in l)
         check(out.returncode == 0 and "word" in said, "passes runs and prints the page count")
@@ -154,12 +167,22 @@ with tempfile.TemporaryDirectory() as tmp:
             names = json.loads(said.get("markers", "null"))
         except ValueError:
             names = None
-        check(names == ["answer.no", "answer.yes", "goal:200x12", "surname:100x12"], f"passes prints the markers it wrote (got {names})")
+        check(names == ["answer.no", "answer.yes", "goal:200x12", "who:50x10", "surname:100x12"], f"passes prints the markers it wrote (got {names})")
 
     # passes stops on a blank whose app.xml has no page count.
     build(os.path.join(tmp, "nopages.docx"), app="")
     out = docx_py("passes", os.path.join(tmp, "nopages.docx"), os.path.join(tmp, "a2.docx"), os.path.join(tmp, "b2.docx"))
     check(out.returncode != 0 and "Pages" in out.stderr, "passes stops without <Pages>")
+
+    # apply's "pages" gives such a sample its count, and never overrides the count Word saved.
+    pages = os.path.join(tmp, "pages.json")
+    with open(pages, "w", encoding="utf-8") as f:
+        json.dump({"edits": [], "pages": 3}, f)
+    out = docx_py("apply", os.path.join(tmp, "nopages.docx"), pages, os.path.join(tmp, "paged.docx"), "--removed", removed)
+    said = docx_py("passes", os.path.join(tmp, "paged.docx"), os.path.join(tmp, "a3.docx"), os.path.join(tmp, "b3.docx")).stdout if out.returncode == 0 else ""
+    check("word pages 3" in said, "apply writes \"pages\" into a sample without <Pages>")
+    out = docx_py("apply", sample, pages, os.path.join(tmp, "paged2.docx"), "--removed", removed)
+    check(out.returncode != 0 and not os.path.exists(os.path.join(tmp, "paged2.docx")), "apply refuses \"pages\" over Word's own <Pages>")
 
     # apply refuses comments, the people who wrote them and a glossary; dump names them.
     for part in ("word/comments.xml", "word/people.xml", "word/glossary/document.xml"):

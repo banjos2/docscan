@@ -8,14 +8,20 @@ make the two passes make-form converts to PDF. Standard library only; run with -
 
 edits.json: {"edits": [{"part": "word/document.xml", "p": 12, "r": [3, 4], "replace": "{{surname:180x12}}"},
                        {"p": 13, "r": [2], "clear": true}, {"p": 20, "r": [1], "box": "sex.F"},
-                       {"p": 30, "add": "{{tick}}", "at": "start"}, {"p": 41, "para": "{{org:380x30}}"}],
-             "media": ["word/media/image2.jpeg"]}
+                       {"p": 30, "add": "{{tick}}", "at": "start"}, {"p": 41, "para": "{{org:380x30}}"},
+                       {"p": 50, "r": [7], "add": "{{sponsorWho:140x11}}", "after": "(specify)"},
+                       {"p": 50, "ind": {"right": 2794}}],
+             "media": ["word/media/image2.jpeg"], "pages": 4}
 p and r are the paragraph and run numbers dump prints; "part" defaults to word/document.xml.
 replace: the runs' text goes, the first run holds the marker in its own format. clear: the runs lose text, field codes
 and drawings (a tick drawn over a box), keep tabs and breaks. box: the run's box glyph gets the marker right after it;
 a run with several boxes takes a list, "box": ["q.no", "q.yes"], one marker per box in order ("" for a box left out).
-add: a marker run at the start or the end of a paragraph that has no value. para: a paragraph of its own right after
-the label's, for a field below a label that has no empty line under it. media: images to drop with their drawings.
+add: a marker run at the start or the end of a paragraph that has no value; with "r" and "after", inside that run right
+after the text "after" (a label and the next heading printed in one run). para: a paragraph of its own right after
+the label's, for a field below a label that has no empty line under it. ind: the paragraph's w:ind attributes in
+twips, a little more room for a line full to its indent whose last word the markers of pass A would push to the next
+line (B must keep its breaks: check the render). media: images to drop with their drawings.
+pages: only for a sample whose docProps/app.xml has no <Pages> (Word never saved it): the page count for make-form.
 apply also blanks every author and initials, and refuses a sample with comments, people.xml or a glossary.
 After any change here: python3 -I scripts/blanks/docx-selfcheck.py
 """
@@ -375,6 +381,26 @@ def apply(src, edits_path, dst, removed_path):
                 for el in elements(r):
                     if el.nodeName not in ("w:rPr", "w:tab", "w:br", "w:cr"):
                         r.removeChild(el)
+        elif "ind" in e:
+            # A line full to its indent, which the markers of pass A would push the last word off: a little more room.
+            # B keeps its line breaks while the room added is less than the next word (check the render).
+            ind = [i for ppr in elements(p, "w:pPr") for i in elements(ppr, "w:ind")]
+            if not ind:
+                sys.exit(f"{part} p{e['p']}: no w:ind to change")
+            for side, twips in e["ind"].items():
+                ind[0].setAttribute(f"w:{side}", str(int(twips)))
+        elif "add" in e and "after" in e:
+            # A marker inside a run, right after its text "after": a label and the next heading printed in one run.
+            (r,) = rs
+            text = run_text(r)
+            k = text.find(e["after"])
+            if r.parentNode is None or k < 0:
+                sys.exit(f"{part} p{e['p']} r{e['r'][0]}: no {e['after']!r} in the run, or the run was edited already")
+            k += len(e["after"])
+            for s in (text[:k], e["add"], text[k:]):
+                if s:
+                    r.parentNode.insertBefore(clone_with(r, s), r)
+            r.parentNode.removeChild(r)
         elif "add" in e:
             # A marker where the sample has no value: a run of its own at the start or the end of the paragraph.
             own = runs(p)
@@ -453,10 +479,11 @@ def apply(src, edits_path, dst, removed_path):
                 erase(rel.getAttribute("Target"))
                 rel.parentNode.removeChild(rel)
 
-    # Alt text and a picture's own name often hold the file name it was inserted from.
+    # Alt text and a picture's own name often hold the file name it was inserted from; a shape or a group repeats the
+    # name in its own cNvPr (wps:, wpg:), whatever its prefix.
     for part in [n for n in z.namelist() if STORY.match(n)]:
-        for tag in ("wp:docPr", "pic:cNvPr"):
-            for el in doc_of(part).getElementsByTagName(tag):
+        for el in doc_of(part).getElementsByTagName("*"):
+            if el.nodeName.split(":")[-1] in ("docPr", "cNvPr"):
                 for a in ("descr", "title", "name"):
                     if el.getAttribute(a):
                         erase(el.getAttribute(a))
@@ -493,6 +520,14 @@ def apply(src, edits_path, dst, removed_path):
         for el in [e for name in ("dcterms:created", "dcterms:modified") for e in doc_of("docProps/core.xml").getElementsByTagName(name)]:
             el.parentNode.removeChild(el)
     clear_text("docProps/app.xml", lambda el: el.nodeName not in ("Company", "Manager", "HyperlinkBase") and owner(el, "TitlesOfParts") is None)
+    # A sample Word never saved (a converter's output) has no page count for make-form to check against: the edits
+    # give it, one page per section that starts a page. A count Word saved is never overridden.
+    if "pages" in spec:
+        app = doc_of("docProps/app.xml") if "docProps/app.xml" in z.namelist() else None
+        if app is None or app.getElementsByTagName("Pages"):
+            sys.exit(f"{src}: \"pages\" is only for a sample whose docProps/app.xml has no <Pages>")
+        root = app.documentElement
+        root.appendChild(app.createElementNS(root.namespaceURI, "Pages")).appendChild(app.createTextNode(str(int(spec["pages"]))))
     clear_text("docProps/custom.xml")
     for n in z.namelist():
         if n.startswith("customXml/") and n.endswith(".xml") and "/_rels/" not in n:
