@@ -15,8 +15,9 @@ export const unkernedWidth = (text: string, size: number, font: PDFFont) =>
   [...text].reduce((sum, c) => sum + font.widthOfTextAtSize(c, size), 0)
 
 // The lines Preview (PDFKit) wraps a multiline field's text into, at most: it breaks after spaces, after a "-" or "/"
-// that no digit or space follows, and through a word wider than the line, but never before / , ; . : ! ? ) ] }, even
-// after a space (Unicode line breaking, UAX #14 rule LB13), 3 pt in from each side, measuring with macOS
+// that no digit or space follows, and through a word wider than the line, but never before / , ; . : ! ? ) ] } or
+// after ( [ {, even with a space between (Unicode line breaking, UAX #14 rules LB13 and LB14), 3 pt in from each side,
+// measuring with macOS
 // Helvetica, whose kerning is lighter than the AFM's: pdf-lib's kerned widths fell up to 6.5 pt short of it on a
 // 50-character line at 10 pt. Unkerned AFM widths fell short by 0.08 pt at most, so ½ pt more inset per side covers it.
 // ponytail: measured in scripts/render-pdf-page.js renders and AppKit widths of 3000 made-up strings at 4–14 pt;
@@ -28,8 +29,8 @@ export function previewLines(text: string, boxWidth: number, size: number, font:
   for (const para of text.split("\n")) {
     n++
     let line = ""
-    // Pieces that end where a break is allowed; spaces before a closing mark stay inside the piece.
-    for (const piece of para.match(/(?:\S|\s+(?=[/,;.:!?)\]}]))*?(?:\s+(?![\s/,;.:!?)\]}])|[-/](?=[^\s\d/,;.:!?)\]}])|$)/g) ?? []) {
+    // Pieces that end where a break is allowed; spaces before a closing mark or after an opening one stay inside the piece.
+    for (const piece of para.match(/(?:\S|\s+(?=[/,;.:!?)\]}])|(?<=[([{])\s+)*?(?:(?<![([{])\s+(?![\s/,;.:!?)\]}])|[-/](?=[^\s\d/,;.:!?)\]}])|$)/g) ?? []) {
       if (w(line + piece) <= width) {
         line += piece
         continue
