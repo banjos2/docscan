@@ -8,7 +8,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join, relative, resolve } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
-import { PDFDocument, PDFName, StandardFonts } from "pdf-lib"
+import { closePath, fill, lineTo, moveTo, PDFDocument, PDFName, popGraphicsState, pushGraphicsState, rgb, setFillingColor, StandardFonts } from "pdf-lib"
 import { findText } from "./find-text.js"
 
 const [src, out, fieldsTs] = process.argv.slice(2)
@@ -17,6 +17,26 @@ const fail = (msg) => {
   throw new Error(`${src}: ${msg}`)
 }
 const sameLine = (p, q) => p.page === q.page && Math.abs(p.y - q.y) < 1
+
+// A box's look: the blank prints the box, the widget only pdf-lib's check mark when on and nothing when off. pdf-lib's own
+// look also strokes a hairline frame round the widget, a second square beside the printed one. The mark is pdf-lib's
+// (drawCheckMark: three points, a right angle at the middle one, half the box's size, a 1.5 pt line), drawn as a filled
+// outline, so the look has no stroke at all.
+function tickOnly(_box, widget) {
+  const { width, height } = widget.getRectangle()
+  const size = Math.min(width, height) / 2, half = 0.75
+  const [p2, p3] = [[-0.25, -0.49], [0.69, 0.475]]
+  const p1 = [-0.675, p2[1] - ((-0.675 - p2[0]) * (p3[0] - p2[0])) / (p3[1] - p2[1])]
+  const [a, b, c] = [p1, p2, p3].map(([x, y]) => [width / 2 + x * size, height / 2 + y * size])
+  // A segment's normal, half a line wide; at a right angle the outline's corners are the two normals added.
+  const normal = (p, q) => [p[1] - q[1], q[0] - p[0]].map((d) => (d * half) / Math.hypot(q[0] - p[0], q[1] - p[1]))
+  const [n1, n2] = [normal(a, b), normal(b, c)]
+  const at = (p, k1, k2) => [0, 1].map((i) => p[i] + k1 * n1[i] + k2 * n2[i])
+  const [first, ...rest] = [at(a, 1, 0), at(b, 1, 1), at(c, 0, 1), at(c, 0, -1), at(b, -1, -1), at(a, -1, 0)]
+  const on = [pushGraphicsState(), setFillingColor(rgb(0, 0, 0)), moveTo(...first), ...rest.map((p) => lineTo(...p)), closePath(), fill(), popGraphicsState()]
+  const look = { on, off: [] }
+  return { normal: look, down: look }
+}
 
 const tmp = mkdtempSync(join(tmpdir(), "make-form-"))
 try {
@@ -98,7 +118,11 @@ try {
       w.dict.delete(PDFName.of("AP"))
     }
   }
-  for (const x of boxes) form.createCheckBox(x.name).addToPage(pages[x.page], { x: x.x, y: x.y, width: x.width, height: x.height, ...bare })
+  for (const x of boxes) {
+    const box = form.createCheckBox(x.name)
+    box.addToPage(pages[x.page], { x: x.x, y: x.y, width: x.width, height: x.height, ...bare })
+    box.updateAppearances(tickOnly)
+  }
   // LibreOffice's document info and XMP go, with every object nothing points at any more.
   writeFileSync(join(tmp, "form.pdf"), await doc.save({ updateFieldAppearances: false }))
   execFileSync(process.execPath, [fileURLToPath(new URL("clean-pdf.mjs", import.meta.url)), join(tmp, "form.pdf"), out], { stdio: "ignore" })
