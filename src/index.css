@@ -123,8 +123,9 @@
    regardless of specificity, so this keeps the focus ring on every shadcn control.
    Text fields and select triggers are excluded (user decision): they match :focus-visible on every
    mouse click, and the orange outline stacked on shadcn's own grey border/ring looked heavy — those
-   controls keep shadcn's neutral focus style instead. */
-:focus-visible:not(input, textarea, select, [data-slot="select-trigger"]) {
+   controls keep shadcn's neutral focus style instead. Options in an open select are excluded too: the
+   highlighted one shows by its background, as listbox options do. */
+:focus-visible:not(input, textarea, select, [data-slot="select-trigger"], [data-slot="select-item"]) {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
