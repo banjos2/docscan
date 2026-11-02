@@ -45,7 +45,7 @@ export function Dropzone({ photo, busy, error, onFile }: Props) {
           pick(e.dataTransfer.files)
         }}
         className={cn(
-          "relative flex min-h-80 cursor-pointer flex-col items-center justify-center gap-3 overflow-hidden rounded-3xl bg-tile p-6 text-center transition-colors duration-300 hover:bg-tile-hover",
+          "relative flex min-h-56 cursor-pointer flex-col items-center justify-center gap-3 overflow-hidden rounded-3xl bg-tile p-6 text-center sm:min-h-80 transition-colors duration-300 hover:bg-tile-hover",
           "has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-focus-ring",
           over && "bg-tile-hover",
         )}
@@ -66,8 +66,11 @@ export function Dropzone({ photo, busy, error, onFile }: Props) {
         ) : (
           <>
             <ScanLine className="size-10" strokeWidth={1.5} aria-hidden />
-            <p className="font-medium">Перетащите фото паспорта или ID-карты</p>
-            <p className="text-sm">или нажмите, чтобы выбрать файл: JPG, PNG, WebP, HEIC</p>
+            {/* A finger can't drag a file: touch screens get the camera and the gallery instead. */}
+            <p className="font-medium pointer-coarse:hidden">Перетащите фото паспорта или ID‑карты</p>
+            <p className="text-sm pointer-coarse:hidden">или нажмите, чтобы выбрать файл: JPG, PNG, WebP, HEIC</p>
+            <p className="hidden font-medium pointer-coarse:block">Сфотографируйте паспорт или ID‑карту</p>
+            <p className="hidden text-sm pointer-coarse:block">или выберите фото в галерее: JPG, PNG, WebP, HEIC</p>
           </>
         )}
         {busy && (

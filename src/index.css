@@ -116,6 +116,9 @@
   }
   html {
     @apply font-sans;
+    /* Phones: no grey flash over a tapped control (they have their own pressed look), no font inflation in landscape. */
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
   }
 }
 

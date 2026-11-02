@@ -316,7 +316,7 @@ function FieldRow({
     control = (
       <div role="group" aria-labelledby={`${id}-label`} className="grid gap-2 sm:grid-cols-2">
         {Object.entries(options).map(([k, label]) => (
-          <label key={k} className="flex items-center gap-2 text-sm">
+          <label key={k} className="flex items-center gap-2 text-sm pointer-coarse:min-h-10 pointer-coarse:text-base">
             <Checkbox
               checked={values.means.includes(k)}
               onCheckedChange={(c) => onChange("means", c === true ? [...values.means, k] : values.means.filter((m) => m !== k))}
