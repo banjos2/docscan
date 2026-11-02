@@ -10,7 +10,7 @@ edits.json: {"edits": [{"part": "word/document.xml", "p": 12, "r": [3, 4], "repl
                        {"p": 13, "r": [2], "clear": true}, {"p": 20, "r": [1], "box": "sex.F"},
                        {"p": 30, "add": "{{tick}}", "at": "start"}, {"p": 41, "para": "{{org:380x30}}"},
                        {"p": 50, "r": [7], "add": "{{sponsorWho:140x11}}", "after": "(specify)"},
-                       {"p": 50, "ind": {"right": 2794}}],
+                       {"p": 50, "ind": {"right": 2794}}, {"p": 60, "spacing": {"lineRule": "atLeast"}}],
              "media": ["word/media/image2.jpeg"], "pages": 4}
 p and r are the paragraph and run numbers dump prints; "part" defaults to word/document.xml.
 replace: the runs' text goes, the first run holds the marker in its own format. clear: the runs lose text, field codes
@@ -18,9 +18,11 @@ and drawings (a tick drawn over a box), keep tabs and breaks. box: the run's box
 a run with several boxes takes a list, "box": ["q.no", "q.yes"], one marker per box in order ("" for a box left out).
 add: a marker run at the start or the end of a paragraph that has no value; with "r" and "after", inside that run right
 after the text "after" (a label and the next heading printed in one run). para: a paragraph of its own right after
-the label's, for a field below a label that has no empty line under it. ind: the paragraph's w:ind attributes in
-twips, a little more room for a line full to its indent whose last word the markers of pass A would push to the next
-line (B must keep its breaks: check the render). media: images to drop with their drawings.
+the label's, for a field below a label that has no empty line under it. ind: the paragraph's w:ind attributes
+(left, right, start, end, firstLine, hanging) in twips, a little more room for a line full to its indent whose last
+word the markers of pass A would push to the next line (B must keep its breaks: check the render). spacing: its
+w:spacing attributes (before, after, line in twips; lineRule auto, exact or atLeast), atLeast for an exact line
+height lower than its text, which the converter clips at the top. media: images to drop with their drawings.
 pages: only for a sample whose docProps/app.xml has no <Pages> (Word never saved it): the page count for make-form.
 apply also blanks every author and initials, and refuses a sample with comments, people.xml or a glossary.
 After any change here: python3 -I scripts/blanks/docx-selfcheck.py
@@ -332,6 +334,17 @@ def clone_with(run, text):
     return r
 
 
+# The w:pPr attributes the ind and spacing edits may set; anything else would write an invalid attribute.
+PPR_ATTRS = {"ind": ("left", "right", "start", "end", "firstLine", "hanging"), "spacing": ("before", "after", "line", "lineRule")}
+LINE_RULES = ("auto", "exact", "atLeast")
+
+
+def one_run(e, part, rs):
+    if len(rs) != 1:
+        sys.exit(f"{part} p{e['p']} r{e.get('r', [])}: one run for this edit, \"r\": [n]")
+    return rs[0]
+
+
 def apply(src, edits_path, dst, removed_path):
     z = zipfile.ZipFile(src)
     if refused(z.namelist()):
@@ -381,17 +394,26 @@ def apply(src, edits_path, dst, removed_path):
                 for el in elements(r):
                     if el.nodeName not in ("w:rPr", "w:tab", "w:br", "w:cr"):
                         r.removeChild(el)
-        elif "ind" in e:
-            # A line full to its indent, which the markers of pass A would push the last word off: a little more room.
-            # B keeps its line breaks while the room added is less than the next word (check the render).
-            ind = [i for ppr in elements(p, "w:pPr") for i in elements(ppr, "w:ind")]
-            if not ind:
-                sys.exit(f"{part} p{e['p']}: no w:ind to change")
-            for side, twips in e["ind"].items():
-                ind[0].setAttribute(f"w:{side}", str(int(twips)))
+        elif "ind" in e or "spacing" in e:
+            # ind: a line full to its indent, which the markers of pass A would push the last word off: a little more
+            # room; B keeps its line breaks while the room added is less than the next word (check the render).
+            # spacing: an exact line height lower than its text, which the converter clips at the top: atLeast.
+            tag = "ind" if "ind" in e else "spacing"
+            at = f"{part} p{e['p']}"
+            own = [i for ppr in elements(p, "w:pPr") for i in elements(ppr, "w:" + tag)]
+            if not own:
+                sys.exit(f"{at}: no w:{tag} to change")
+            for name, value in e[tag].items():
+                if name not in PPR_ATTRS[tag]:
+                    sys.exit(f"{at}: no attribute {name!r} for w:{tag}; {tag} sets {', '.join(PPR_ATTRS[tag])}")
+                if name == "lineRule" and value not in LINE_RULES:
+                    sys.exit(f"{at}: w:spacing lineRule is {', '.join(LINE_RULES)}, not {value!r}")
+                if name != "lineRule" and (not isinstance(value, int) or isinstance(value, bool)):
+                    sys.exit(f"{at}: w:{tag} {name} is twips, a whole number, not {value!r}")
+                own[0].setAttribute(f"w:{name}", str(value))
         elif "add" in e and "after" in e:
             # A marker inside a run, right after its text "after": a label and the next heading printed in one run.
-            (r,) = rs
+            r = one_run(e, part, rs)
             text = run_text(r)
             k = text.find(e["after"])
             if r.parentNode is None or k < 0:
@@ -428,7 +450,7 @@ def apply(src, edits_path, dst, removed_path):
             new.appendChild(r)
             p.parentNode.insertBefore(new, p.nextSibling)
         elif "box" in e:
-            (r,) = rs
+            r = one_run(e, part, rs)
             at = f"{part} p{e['p']} r{e['r'][0]}"
             if r.parentNode is None:
                 sys.exit(f"{at}: one box edit per run; for several boxes in it list their markers in order, \"\" for a box left out")

@@ -69,6 +69,7 @@ BODY = [
     # A shape's own name, in wps:cNvPr.
     p('<w:r><w:drawing><wp:anchor><wp:extent cx="381000" cy="254000"/><wp:docPr id="3" name="Zxqshapename 2"/><a:graphic><a:graphicData>'
       '<wps:wsp><wps:cNvPr id="3" name="Zxqshapename 2"/></wps:wsp></a:graphicData></a:graphic></wp:anchor></w:drawing></w:r>'),
+    p(r("Linia ścisła"), ppr='<w:pPr><w:spacing w:before="2" w:line="154" w:lineRule="exact"/></w:pPr>'),
 ]
 VALUES = ["KOWALCZYK", "ЯРОСЛАВ", "XZ1234567", "jan.kowalczyk@example.org", "600 123 456", "14-02-1987", "ANNA.NOWAK@example.pl",
           "MARSZAŁKOWSKA", "PIOTR", "WIŚNIEWSKI", "1990", "zxqhyone.zxqhytwo@zxqhyhost.zxq",
@@ -142,10 +143,11 @@ with tempfile.TemporaryDirectory() as tmp:
     check("{{surname:100x12}}" in shown, "dump prints a marker as it is")
 
     # apply: two boxes of one run marked, a paragraph under a numbered label not numbered, a marker inside a run, an
-    # indent loosened, authors blanked.
+    # indent loosened, an exact line height made a minimum, authors blanked.
     with open(edits, "w", encoding="utf-8") as f:
         json.dump({"edits": [{"p": 0, "r": [1], "box": ["answer.no", "answer.yes"]}, {"p": 1, "para": "{{goal:200x12}}"},
-                             {"p": 2, "r": [0], "add": "{{who:50x10}}", "after": "Nazwisko /"}, {"p": 18, "ind": {"right": 2794}}]}, f)
+                             {"p": 2, "r": [0], "add": "{{who:50x10}}", "after": "Nazwisko /"}, {"p": 18, "ind": {"right": 2794}},
+                             {"p": 20, "spacing": {"lineRule": "atLeast"}}]}, f)
     out = docx_py("apply", sample, edits, clean, "--removed", removed)
     check(out.returncode == 0, "apply runs" + (f": {out.stderr.strip()[-300:]}" if out.returncode else ""))
     if out.returncode == 0:
@@ -159,6 +161,7 @@ with tempfile.TemporaryDirectory() as tmp:
         k = texts.index("{{who:50x10}}") if "{{who:50x10}}" in texts else 0
         check(texts[k - 1:k + 2] == ["1. Nazwisko /", "{{who:50x10}}", " Фамилия: "], f"add after puts the marker inside the run (got {texts[k - 1:k + 2]})")
         check('<w:ind w:left="105" w:right="2794"/>' in xml, "ind changes only the indent it names")
+        check('<w:spacing w:before="2" w:line="154" w:lineRule="atLeast"/>' in xml, "spacing changes only the attribute it names")
         check("Zxqshapename" not in xml, "apply blanks a shape's own name")
         out = docx_py("passes", clean, os.path.join(tmp, "a.docx"), os.path.join(tmp, "b.docx"))
         said = dict(l.split(" ", 1) for l in out.stdout.splitlines() if " " in l)
@@ -183,6 +186,23 @@ with tempfile.TemporaryDirectory() as tmp:
     check("word pages 3" in said, "apply writes \"pages\" into a sample without <Pages>")
     out = docx_py("apply", sample, pages, os.path.join(tmp, "paged2.docx"), "--removed", removed)
     check(out.returncode != 0 and not os.path.exists(os.path.join(tmp, "paged2.docx")), "apply refuses \"pages\" over Word's own <Pages>")
+
+    # A wrong edit stops apply with its place named, before anything is written.
+    for i, (edit, says) in enumerate([({"p": 3, "ind": {"right": 100}}, "p3: no w:ind"),
+                       ({"p": 18, "ind": {"rigth": 100}}, "p18: no attribute 'rigth'"),
+                       ({"p": 18, "ind": {"right": "wide"}}, "p18: w:ind right"),
+                       ({"p": 3, "spacing": {"line": 240}}, "p3: no w:spacing"),
+                       ({"p": 20, "spacing": {"beforeLines": 1}}, "p20: no attribute 'beforeLines'"),
+                       ({"p": 20, "spacing": {"lineRule": "exactly"}}, "p20: w:spacing lineRule"),
+                       ({"p": 2, "r": [0], "add": "{{x:10x10}}", "after": "Zxqnowhere"}, "p2 r0: no 'Zxqnowhere'"),
+                       ({"p": 2, "r": [0, 1], "add": "{{x:10x10}}", "after": "Nazwisko"}, "p2 r[0, 1]: one run"),
+                       ({"p": 0, "r": [0, 1], "box": "answer.no"}, "p0 r[0, 1]: one run")]):
+        with open(edits, "w", encoding="utf-8") as f:
+            json.dump({"edits": [edit]}, f)
+        bad = os.path.join(tmp, f"wrong{i}.docx")
+        out = docx_py("apply", sample, edits, bad, "--removed", removed)
+        check(out.returncode != 0 and says in out.stderr and "Traceback" not in out.stderr and not os.path.exists(bad),
+              f"apply stops on {json.dumps(edit, ensure_ascii=False)} with {says!r}" + (f" (said {out.stderr.strip()[-200:]!r})" if says not in out.stderr else ""))
 
     # apply refuses comments, the people who wrote them and a glossary; dump names them.
     for part in ("word/comments.xml", "word/people.xml", "word/glossary/document.xml"):
