@@ -13,7 +13,8 @@ const daSize = (d: PDFDict) => {
 for (const file of readdirSync(DIR).filter((f) => f.endsWith(".pdf"))) {
   test(`${file} carries no applicant data or metadata`, async () => {
     const doc = await PDFDocument.load(readFileSync(new URL(file, DIR)), { updateMetadata: false })
-    expect([doc.getAuthor(), doc.getCreator(), doc.getProducer(), doc.getTitle(), doc.getSubject(), doc.getKeywords()]).toEqual(Array(6).fill(undefined))
+    // No document info at all, not even dates. (pdf-lib's getAuthor() and the like would add an empty one.)
+    expect(doc.context.trailerInfo.Info).toBeUndefined()
     expect(doc.catalog.get(PDFName.of("Metadata"))).toBeUndefined()
     const form = doc.getForm()
     expect(form.acroForm.dict.get(PDFName.of("XFA"))).toBeUndefined()
