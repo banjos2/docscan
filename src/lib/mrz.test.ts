@@ -103,6 +103,8 @@ test("validate requires key fields and Latin-1 text", () => {
   // Covering: DEL (0x7F) and C1 control (0x85) must be rejected
   expect(validate({ ...emptyValues(), regStreet: `Berlin${String.fromCharCode(0x7f)}` }, Q("pl-guest-d"), TODAY).errors.regStreet).toBe("Анкета заполняется латиницей")
   expect(validate({ ...emptyValues(), regStreet: `Berlin${String.fromCharCode(0x85)}` }, Q("pl-guest-d"), TODAY).errors.regStreet).toBe("Анкета заполняется латиницей")
+  // A tab pasted from a spreadsheet prints as a space.
+  expect(validate({ ...emptyValues(), regStreet: "Polna\t7" }, Q("pl-guest-d"), TODAY).errors.regStreet).toBeUndefined()
 })
 
 test("validate skips the sponsor field when the payer is not the sponsor", () => {
