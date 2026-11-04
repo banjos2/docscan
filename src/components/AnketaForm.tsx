@@ -232,7 +232,14 @@ export function AnketaForm({ values, sources, errors, questionnaire, onChange, o
 }
 
 function SourceBadge({ source }: { source?: Source }) {
-  if (source === "mrz") return <Badge variant="secondary">MRZ</Badge>
+  // The chevrons are the MRZ's own filler character: the mark of a value read from the document.
+  if (source === "mrz")
+    return (
+      <Badge variant="secondary" className="font-mono">
+        <span aria-hidden>{"<<<"}</span>
+        MRZ
+      </Badge>
+    )
   if (source === "check")
     return (
       <Badge variant="outline">

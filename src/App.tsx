@@ -125,17 +125,18 @@ export function App() {
   }
 
   return (
-    <div className="mx-auto flex min-h-svh w-full max-w-[1400px] flex-col gap-8 px-4 py-8 sm:px-6 md:px-8 md:py-12">
+    <div className="mx-auto flex min-h-svh w-full max-w-4xl flex-col gap-8 px-4 py-8 sm:px-6 md:px-8 md:py-12">
       <header className="flex flex-col gap-2">
-        <p className="font-display text-sm font-bold tracking-wider text-flame-ink uppercase">Шенгенская анкета</p>
-        <h1 className="font-display text-3xl font-bold tracking-tight uppercase">DocScan</h1>
+        <p className="font-display text-sm font-medium text-flame-ink">Шенгенская анкета</p>
+        <h1 className="font-display text-3xl font-semibold tracking-tight">DocScan</h1>
         <p className="max-w-prose text-muted-foreground">
           Загрузите фото паспорта или ID-карты: данные из MRZ попадут в анкету. Проверьте их, дополните и скачайте готовый
           PDF.
         </p>
       </header>
-      <main className="grid items-start gap-8 lg:grid-cols-2">
-        <section aria-label="Документ" className="flex flex-col gap-4 lg:sticky lg:top-8">
+      {/* One column: the photo first, the questionnaire it fills under it. */}
+      <main className="flex flex-col gap-8">
+        <section aria-label="Документ" className="flex flex-col gap-4">
           <Dropzone photo={photo} busy={busy} error={ocrError} onFile={scan} />
         </section>
         <section aria-label="Анкета" className="flex flex-col gap-6">

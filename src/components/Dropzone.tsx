@@ -1,5 +1,5 @@
 import { useRef, useState } from "react"
-import { CircleAlert, LoaderCircle, ScanLine } from "lucide-react"
+import { CircleAlert, LoaderCircle } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { isHeic } from "@/lib/heic"
@@ -45,7 +45,7 @@ export function Dropzone({ photo, busy, error, onFile }: Props) {
           pick(e.dataTransfer.files)
         }}
         className={cn(
-          "relative flex min-h-56 cursor-pointer flex-col items-center justify-center gap-3 overflow-hidden rounded-3xl bg-tile p-6 text-center sm:min-h-80 transition-colors duration-300 hover:bg-tile-hover",
+          "relative flex min-h-56 cursor-pointer flex-col items-center justify-center gap-3 overflow-hidden rounded-3xl bg-tile p-6 text-center sm:min-h-64 transition-colors duration-300 hover:bg-tile-hover",
           "has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-focus-ring",
           over && "bg-tile-hover",
         )}
@@ -62,10 +62,10 @@ export function Dropzone({ photo, busy, error, onFile }: Props) {
           }}
         />
         {photo ? (
-          <img src={photo} alt="Загруженный документ" className="max-h-[70vh] w-full rounded-xl object-contain" />
+          <img src={photo} alt="Загруженный документ" className="max-h-[60vh] w-full rounded-xl object-contain" />
         ) : (
           <>
-            <ScanLine className="size-10" strokeWidth={1.5} aria-hidden />
+            <PassportPage />
             {/* A finger can't drag a file: touch screens get the camera and the gallery instead. */}
             <p className="font-medium pointer-coarse:hidden">Перетащите фото паспорта или ID‑карты</p>
             <p className="text-sm pointer-coarse:hidden">или нажмите, чтобы выбрать файл: JPG, PNG, WebP, HEIC</p>
@@ -102,6 +102,28 @@ export function Dropzone({ photo, busy, error, onFile }: Props) {
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
+    </div>
+  )
+}
+
+// What to photograph: a passport's data page, its two machine-readable lines lit. The lines are ICAO 9303's
+// specimen (the fictional Utopia), clipped with a fade where the page ends.
+function PassportPage() {
+  return (
+    <div aria-hidden className="w-full max-w-72 rounded-xl border border-foreground/10 bg-background p-3 text-left shadow-sm">
+      <div className="flex gap-3">
+        <div className="h-16 w-12 shrink-0 rounded-md bg-foreground/5" />
+        <div className="flex flex-1 flex-col gap-2 pt-1">
+          <div className="h-1.5 w-1/2 rounded-full bg-foreground/10" />
+          <div className="h-1.5 w-3/4 rounded-full bg-foreground/10" />
+          <div className="h-1.5 w-2/3 rounded-full bg-foreground/10" />
+          <div className="h-1.5 w-1/3 rounded-full bg-foreground/10" />
+        </div>
+      </div>
+      <div className="mt-3 overflow-hidden rounded-md bg-flame/10 px-2 py-1.5 font-mono text-xs leading-4 tracking-wide whitespace-nowrap text-flame-ink mask-r-from-80%">
+        <div>{"P<UTOERIKSSON<<ANNA<MARIA<<<<<<<<<<<<<<<<<<<"}</div>
+        <div>{"L898902C36UTO7408122F1204159ZE184226B<<<<<10"}</div>
+      </div>
     </div>
   )
 }

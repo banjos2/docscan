@@ -21,7 +21,6 @@
         --icon: #9a9a9a;
         --button: #111;
         --on-button: #fff;
-        --dots: rgba(0, 0, 0, 0.18);
         --error: #dc2626;
         --focus-ring: #b45309;
         color-scheme: light dark;
@@ -38,7 +37,6 @@
           --icon: #8a8a8a;
           --button: #ececec;
           --on-button: #171717;
-          --dots: rgba(255, 255, 255, 0.2);
           --error: #f87171;
           --focus-ring: #f6821f;
         }
@@ -73,20 +71,9 @@
         text-align: center;
       }
       .logo {
-        position: relative;
-        width: 96px;
-        height: 96px;
-        margin: -8px auto 4px;
+        margin: 0 auto 16px;
         display: grid;
         place-items: center;
-      }
-      .logo::before {
-        content: "";
-        position: absolute;
-        inset: 0;
-        background: radial-gradient(circle, var(--dots) 1px, transparent 1.5px) center / 7px 7px;
-        mask: radial-gradient(circle, transparent 30%, #000 45%, transparent 70%);
-        -webkit-mask: radial-gradient(circle, transparent 30%, #000 45%, transparent 70%);
       }
       .logo span {
         position: relative;
@@ -95,9 +82,9 @@
         display: grid;
         place-items: center;
         border-radius: 14px;
-        color: #fff;
-        background: linear-gradient(180deg, #5a5a60, #2c2c30);
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 4px 10px rgba(0, 0, 0, 0.18);
+        /* One solid colour, the button's: a flat mark, no gradient tile. */
+        color: var(--on-button);
+        background: var(--button);
       }
       h1 { margin: 0 0 24px; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
       form { display: grid; gap: 10px; }
