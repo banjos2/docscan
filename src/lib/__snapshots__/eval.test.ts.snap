@@ -1,0 +1,142 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`parser baseline on synthetic misreads at rate 0.005 1`] = `
+{
+  "cases": 300,
+  "exact": 218,
+  "fields": {
+    "birthDate": {
+      "right": 260,
+      "wrong": 0,
+    },
+    "docNumber": {
+      "right": 256,
+      "wrong": 4,
+    },
+    "expiryDate": {
+      "right": 258,
+      "wrong": 2,
+    },
+    "firstName": {
+      "right": 232,
+      "wrong": 28,
+    },
+    "issuedBy": {
+      "right": 260,
+      "wrong": 0,
+    },
+    "nationalId": {
+      "right": 252,
+      "wrong": 8,
+    },
+    "nationality": {
+      "right": 260,
+      "wrong": 0,
+    },
+    "sex": {
+      "right": 260,
+      "wrong": 0,
+    },
+    "surname": {
+      "right": 255,
+      "wrong": 5,
+    },
+  },
+  "rejected": 40,
+  "wrongVerified": 4,
+}
+`;
+
+exports[`parser baseline on synthetic misreads at rate 0.02 1`] = `
+{
+  "cases": 300,
+  "exact": 108,
+  "fields": {
+    "birthDate": {
+      "right": 251,
+      "wrong": 6,
+    },
+    "docNumber": {
+      "right": 237,
+      "wrong": 20,
+    },
+    "expiryDate": {
+      "right": 251,
+      "wrong": 6,
+    },
+    "firstName": {
+      "right": 146,
+      "wrong": 111,
+    },
+    "issuedBy": {
+      "right": 257,
+      "wrong": 0,
+    },
+    "nationalId": {
+      "right": 208,
+      "wrong": 49,
+    },
+    "nationality": {
+      "right": 255,
+      "wrong": 2,
+    },
+    "sex": {
+      "right": 257,
+      "wrong": 0,
+    },
+    "surname": {
+      "right": 246,
+      "wrong": 11,
+    },
+  },
+  "rejected": 43,
+  "wrongVerified": 26,
+}
+`;
+
+exports[`parser baseline on synthetic misreads at rate 0.05 1`] = `
+{
+  "cases": 300,
+  "exact": 41,
+  "fields": {
+    "birthDate": {
+      "right": 255,
+      "wrong": 17,
+    },
+    "docNumber": {
+      "right": 240,
+      "wrong": 32,
+    },
+    "expiryDate": {
+      "right": 254,
+      "wrong": 18,
+    },
+    "firstName": {
+      "right": 78,
+      "wrong": 194,
+    },
+    "issuedBy": {
+      "right": 267,
+      "wrong": 5,
+    },
+    "nationalId": {
+      "right": 158,
+      "wrong": 114,
+    },
+    "nationality": {
+      "right": 270,
+      "wrong": 2,
+    },
+    "sex": {
+      "right": 272,
+      "wrong": 0,
+    },
+    "surname": {
+      "right": 242,
+      "wrong": 30,
+    },
+  },
+  "rejected": 28,
+  "wrongVerified": 41,
+}
+`;

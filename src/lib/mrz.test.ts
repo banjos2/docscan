@@ -28,7 +28,61 @@ test("extract maps a clean TD3 MRZ to anketa fields", () => {
     nationalId: "",
   })
   expect(values.issueDate).toBe("")
-  expect(sources).toMatchObject({ surname: "mrz", docNumber: "mrz", birthDate: "mrz", expiryDate: "mrz", surnameAtBirth: "check" })
+  expect(sources).toMatchObject({ docNumber: "mrz", birthDate: "mrz", expiryDate: "mrz", surnameAtBirth: "check" })
+})
+
+test("extract never confirms a name: no check digit covers line 1", () => {
+  const { sources } = extract([L1, L2], TODAY)
+  expect(sources).toMatchObject({ surname: "check", firstName: "check" })
+})
+
+test("extract confirms a name only when the printed page repeats every word of it", () => {
+  expect(extract(["MUSTERMANN", "ERIKA", L1, L2], TODAY).sources).toMatchObject({ surname: "mrz", firstName: "mrz" })
+  expect(extract(["MUSTERMANN", "ANNA", L1, L2], TODAY).sources).toMatchObject({ surname: "mrz", firstName: "check" })
+})
+
+test("extract does not take a second reading of the MRZ for the printed page", () => {
+  const { sources } = extract([L1, L2, "P D MUSTERMANN ERIKA KKKKKKKKKKKKKKKKKKKK"], TODAY)
+  expect(sources).toMatchObject({ surname: "check", firstName: "check" })
+})
+
+const CLIPPED = "P<D<<MUSTERMAN<<ERIK".padEnd(44, "<")
+
+test("extract prefers the reading of the name line that the printed page backs", () => {
+  // Same letter count, so only the printed words can tell them apart.
+  const other = "P<D<<MUSTERMANX<<ERIKA".padEnd(44, "<")
+  expect(extract([other, L2, L1, L2, "MUSTERMANN", "ERIKA"], TODAY).values).toMatchObject({ surname: "MUSTERMANN", firstName: "ERIKA" })
+})
+
+test("extract prefers the fuller reading of the name line when nothing else decides", () => {
+  expect(extract([CLIPPED, L2, L1, L2], TODAY).values).toMatchObject({ surname: "MUSTERMANN", firstName: "ERIKA" })
+})
+
+test("extract accepts a fuller name line even if that read lost many fillers", () => {
+  expect(extract([CLIPPED, L2, "P<D<<MUSTERMANN<<ERIKA<<<<<<<<", L2], TODAY).values).toMatchObject({ surname: "MUSTERMANN", firstName: "ERIKA" })
+})
+
+test("extract pairs the best name line with the best line 2 from different reads", () => {
+  // The first read has the whole name but a line 2 with a failed birth date; the second read the other way round.
+  const brokenL2 = L2.replace("6408125", "6408135")
+  const { values, sources } = extract([L1, brokenL2, CLIPPED, L2], TODAY)
+  expect(values).toMatchObject({ surname: "MUSTERMANN", firstName: "ERIKA", birthDate: "1964-08-12" })
+  expect(sources.birthDate).toBe("mrz")
+})
+
+test("extract takes line 2 from a read whose name line was too short to pair", () => {
+  const { values, sources } = extract([L1, L2.replace("6408125", "6408135"), "P<D<<MUSTER", L2], TODAY)
+  expect(values.birthDate).toBe("1964-08-12")
+  expect(sources.birthDate).toBe("mrz")
+})
+
+test("extract asks to review a field without a check digit when its line had to be resized", () => {
+  // One filler lost from line 2: the check digits still confirm their fields, nothing confirms these two.
+  const short2 = extract([L1, L2.replace("<<<<<", "<<<<")], TODAY).sources
+  expect(short2).toMatchObject({ nationality: "check", sex: "check", issuedBy: "mrz", docNumber: "mrz", birthDate: "mrz", expiryDate: "mrz" })
+  // The same on line 1: line 2 stays confirmed.
+  const short1 = extract([L1.replace("<<<<<", "<<<<"), L2], TODAY).sources
+  expect(short1).toMatchObject({ issuedBy: "check", nationality: "mrz", sex: "mrz" })
 })
 
 test("extract blanks a birth date whose check digit fails and which is also impossible", () => {
@@ -81,6 +135,13 @@ test("findIssueDate returns the only date that is neither birth nor expiry", () 
   expect(findIssueDate(["12.08.1964", "01 MÄR/MAR 2017", "28.02.2027"], "1964-08-12", "2027-02-28")).toBe("2017-03-01")
   expect(findIssueDate(["15 JUN 1990", "05 APR/APR 21", "05.04.2031"], "1990-06-15", "2031-04-05")).toBe("2021-04-05")
   expect(findIssueDate(["01.01.2010", "01.01.2011"], "1990-01-01", "2030-01-01")).toBe("")
+})
+
+test("findIssueDate lets the label decide between several candidate dates", () => {
+  expect(findIssueDate(["DATE OF ISSUE", "01.01.2010", "PRINTED 01.01.2011"], "1990-01-01", "2030-01-01")).toBe("2010-01-01")
+  expect(findIssueDate(["PRINTED 01.01.2011", "DATE OF ISSUE", "01.01.2010"], "1990-01-01", "2030-01-01")).toBe("2010-01-01")
+  // A label with no date after it decides nothing.
+  expect(findIssueDate(["01.01.2010", "01.01.2011", "DATE OF ISSUE"], "1990-01-01", "2030-01-01")).toBe("")
 })
 
 test("findIssueDate ignores a misread date that isn't on the calendar", () => {
@@ -146,4 +207,59 @@ test("a choice the blank cannot tick is an error", () => {
 test("a field the questionnaire lacks is neither checked nor printed", () => {
   expect(validate({ ...emptyValues(), basis: "Праца" }, Q("pl-guest-d"), TODAY).errors.basis).toBeUndefined()
   expect(validate({ ...emptyValues(), basis: "Праца" }, Q("pl-work"), TODAY).errors.basis).toBe("Анкета заполняется латиницей")
+})
+
+// The MRZ-alphabet reading of a line: for each character [best, its probability, runner-up, its probability].
+const scanned = (l2: string, runnerUp: Record<number, [string, number]>) =>
+  Object.assign([L1, l2], {
+    alts: { [l2]: [...l2].map((c, i): [string, number, string, number] => [c, 0.9, runnerUp[i]?.[0] ?? "", runnerUp[i]?.[1] ?? 0]) },
+  })
+// "D" read for the "0" at index 1: the document number's check digit fails.
+const MISREAD = L2.replace("C01", "CD1")
+
+test("extract repairs a failed field when exactly one runner-up satisfies its check digit, and asks to review it", () => {
+  const { values, sources } = extract(scanned(MISREAD, { 1: ["0", 0.3] }), TODAY)
+  expect(values.docNumber).toBe("C01X00T47")
+  expect(sources.docNumber).toBe("check")
+})
+
+test("extract refuses to choose when two runner-ups would both satisfy the check digit", () => {
+  // "5" at index 0 shifts the weighted sum by the same amount as "0" at index 1.
+  const { values, sources } = extract(scanned(MISREAD, { 0: ["5", 0.3], 1: ["0", 0.3] }), TODAY)
+  expect(values.docNumber).toBe("CD1X00T47")
+  expect(sources.docNumber).toBe("check")
+})
+
+test("extract ignores a runner-up the model barely considered", () => {
+  // "X" is not one of the classic look-alikes, so only the runner-up could have repaired it.
+  expect(extract(scanned(L2.replace("C01", "CX1"), { 1: ["0", 0.01] }), TODAY).values.docNumber).toBe("CX1X00T47")
+})
+
+test("extract does not confirm a field when a plausible runner-up passes the same check digit", () => {
+  // "1" and "B" weigh the same modulo 10, so the check digit cannot tell which one is printed.
+  const { values, sources } = extract(scanned(L2, { 2: ["B", 0.3] }), TODAY)
+  expect(values.docNumber).toBe("C01X00T47")
+  expect(sources.docNumber).toBe("check")
+})
+
+test("extract keeps a field confirmed when the runner-up fails the check digit", () => {
+  expect(extract(scanned(L2, { 1: ["O", 0.3] }), TODAY).sources.docNumber).toBe("mrz")
+})
+
+test("extract repairs a date only with a digit", () => {
+  const broken = L2.replace("6408125", "6408135")
+  expect(extract(scanned(broken, { 18: ["2", 0.3] }), TODAY).values.birthDate).toBe("1964-08-12")
+  // "C" has the value of a 2 modulo 10, but a date holds digits.
+  expect(extract(scanned(broken, { 18: ["C", 0.3] }), TODAY).values.birthDate).toBe("1964-08-13")
+})
+
+test("extract still repairs a field when the line lost a filler", () => {
+  const short = MISREAD.replace("<<<<<", "<<<<")
+  expect(extract(scanned(short, { 1: ["0", 0.3] }), TODAY).values.docNumber).toBe("C01X00T47")
+})
+
+test("extract repairs a classic look-alike in a failed field even when the model was sure, and asks to review it", () => {
+  const { values, sources } = extract([L1, L2.replace("C01", "CO1")], TODAY)
+  expect(values.docNumber).toBe("C01X00T47")
+  expect(sources.docNumber).toBe("check")
 })

@@ -38,3 +38,6 @@ for f in ort-wasm-simd-threaded.jsep.mjs ort-wasm-simd-threaded.jsep.wasm; do
   curl -fsSL -o "$out" "https://cdn.jsdelivr.net/npm/onnxruntime-web@${ort_version}/dist/$f"
   echo "fetched: $out"
 done
+
+# The MRZ decoder needs more from the OCR worker than the SDK returns.
+node scripts/patch-ocr-worker.mjs

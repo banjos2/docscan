@@ -1,5 +1,5 @@
 import { expect, test } from "vitest"
-import { groupRows, mrzBand } from "./ocr"
+import { groupRows, mrzBand, readBand } from "./ocr"
 
 const item = (x: number, y: number, w: number, text: string) => ({
   text,
@@ -23,14 +23,30 @@ test.each([10, -10, 25, 90])("groupRows keeps MRZ lines apart on a page turned b
   expect(groupRows(page.map((b) => turn(deg, b)))).toEqual(["PASSPORT", "P<UTOERIKSSON <<<<<<<<", "L898902C36UTO"])
 })
 
-test("mrzBand frames the MRZ boxes of a small photo with a line of margin and enlarges them", () => {
+test("mrzBand frames the MRZ boxes of a small photo with margin for a missed line and enlarges them", () => {
   // Boxes from a 933×1000 Belarusian passport sample: line 1 came in two fragments, line 2 whole.
   const box = (x: number, y: number, w: number, h: number, text: string) => ({ text, poly: [[x, y], [x + w, y], [x + w, y + h], [x, y + h]] as [number, number][] })
   const band = mrzBand(
     [box(551, 704, 121, 19, "INTERNAL AFFAIRS"), box(235, 769, 166, 17, "P<BLRJOHNSON<<E"), box(606, 776, 99, 16, "<<<<<<<<<"), box(233, 789, 473, 26, "KB12345671BLR8802026F08020191234567A123PB134")],
-    933,
-    1000,
   )
-  expect(band).toEqual({ x: 207, y: 743, w: 525, h: 98, scale: 64 / 26 })
-  expect(mrzBand([box(551, 704, 121, 19, "INTERNAL AFFAIRS"), box(550, 636, 119, 18, "1234567A123PB1")], 933, 1000)).toBeNull()
+  expect(band).toEqual({ x: 207, y: 704, w: 525, h: 176, scale: 64 / 26, ux: 1, uy: 0 })
+  expect(mrzBand([box(551, 704, 121, 19, "INTERNAL AFFAIRS"), box(550, 636, 119, 18, "1234567A123PB1")])).toBeNull()
+})
+
+test("readBand reads each box with the MRZ alphabet and keeps its characters' runner-ups per row", () => {
+  const cand = (t: string) => [...t].map((c): [string, number, string, number] => [c, 0.9, "", 0])
+  const rows = readBand([
+    { ...item(300, 402, 200, "garbage («"), mrz: cand("<<4") },
+    { ...item(10, 400, 280, "C01 x"), mrz: cand("C01") },
+    item(10, 300, 200, "NO MRZ DECODE"),
+  ])
+  expect([...rows]).toEqual(["NO MRZ DECODE", "C01 <<4"])
+  expect(rows.alts?.["C01<<4"]?.map((c) => c[0]).join("")).toBe("C01<<4")
+})
+
+test("mrzBand follows a tilted MRZ instead of framing it with the page axes", () => {
+  const band = mrzBand([turn(20, item(10, 400, 500, "P<UTOERIKSSON<<ANNA<MARIA<<<<<<<<<"))])
+  // One 20 px line with margin for a missed neighbour above and below, not the 230 px an upright frame would need.
+  expect(band?.h).toBeCloseTo(120)
+  expect(band?.w).toBeCloseTo(540)
 })

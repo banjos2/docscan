@@ -9,6 +9,11 @@ export class MrzNotFoundError extends Error {
 
 type Parsed = ReturnType<typeof parse>
 
+// What the OCR thought of one character: [best, its probability, runner-up, its probability].
+export type Candidate = [string, number, string, number]
+// Rows of text, plus the per-character candidates of the rows read with the MRZ alphabet (keyed by the row without spaces).
+export type Rows = string[] & { alts?: Record<string, Candidate[]> }
+
 // [line length, line count] for TD3 (passport), TD2 and TD1 (ID card).
 const FORMATS = [[44, 2], [36, 2], [30, 3]] as const
 const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
@@ -30,28 +35,108 @@ function fitLength(s: string, n: number): string {
   return s.slice(0, at) + "<".repeat(len) + s.slice(at + run[0].length)
 }
 
-function findMrz(rows: string[]): Parsed {
+type Found = { parsed: Parsed; resized: Set<number>; window: string[]; n: number }
+
+const words = (s: string) => s.split(/[^A-Z]+/).filter(Boolean)
+
+// The words of the printed page, for a second opinion on the names. MRZ rows are out: they are the same print read twice.
+function printedWords(rows: string[]): Set<string> {
+  return new Set(rows.filter((r) => !/[<«»‹›≪くㄑ〈＜]/.test(r) && normalize(r) === null).flatMap((r) => words(r.toUpperCase())))
+}
+
+// ponytail: 5% is a guess at what counts as "the model considered it"; calibrate on the real photo set.
+const MIN_RUNNER_UP = 0.05
+const CHECKED_FIELDS = ["documentNumber", "birthDate", "expirationDate", "personalNumber"]
+// Letters and digits OCR swaps while sure of itself, tried only on a field whose check digit already failed.
+const LOOK_ALIKES: Record<string, string> = { O: "0", D: "0", Q: "0", "0": "O", I: "1", "1": "I", Z: "2", "2": "Z", S: "5", "5": "S", G: "6", "6": "G", B: "8", "8": "B" }
+const charValue = (c: string) => (c === "<" ? 0 : /\d/.test(c) ? Number(c) : c.charCodeAt(0) - 55)
+const passes = (text: string, digit: string) =>
+  String([...text].reduce((sum, c, i) => sum + charValue(c) * [7, 3, 1][i % 3], 0) % 10) === digit.replace("<", "0")
+
+// Check digits see only one thing: the sum. So a runner-up that also satisfies one is evidence of doubt about a field
+// that passed, and the only way to repair a field that failed: when exactly one does. Either way a person must look.
+function weighRunnerUps(found: Found, alts: NonNullable<Rows["alts"]>): Found & { doubtful: Set<string> } {
+  const fitted = found.window.map((l) => fitLength(l, found.n))
+  const doubtful = new Set<string>()
+  const fixes: { line: number; at: number; char: string }[] = []
+  for (const field of CHECKED_FIELDS) {
+    const d = found.parsed.details.find((x) => x.field === field)
+    const check = found.parsed.details.find((x) => x.field === `${field}CheckDigit`)
+    if (!d || !check) continue
+    const { line, start, end } = d.ranges[0]
+    const digit = fitted[check.ranges[0].line][check.ranges[0].start]
+    const text = fitted[line].slice(start, end)
+    const isDate = field === "birthDate" || field === "expirationDate"
+    const fits = (at: number, char: string) => {
+      const changed = text.slice(0, at - start) + char + text.slice(at - start + 1)
+      return (!isDate || /^\d+$/.test(changed)) && passes(changed, digit)
+    }
+    const options: typeof fixes = []
+    for (let at = start; at < end; at++) {
+      // The guard also skips characters shifted out of place by a resized line.
+      const [best, , char, p] = alts[found.window[line]]?.[at] ?? []
+      if (best !== fitted[line][at] || !char || (p ?? 0) < MIN_RUNNER_UP) continue
+      if (fits(at, char)) options.push({ line, at, char })
+    }
+    if (!check.valid && !options.length) {
+      for (let at = start; at < end; at++) {
+        const char = LOOK_ALIKES[fitted[line][at]]
+        if (char && fits(at, char)) options.push({ line, at, char })
+      }
+    }
+    if (check.valid ? options.length : options.length === 1) doubtful.add(field)
+    if (!check.valid && options.length === 1) fixes.push(options[0])
+  }
+  if (!fixes.length) return { ...found, doubtful }
+  for (const { line, at, char } of fixes) fitted[line] = fitted[line].slice(0, at) + char + fitted[line].slice(at + 1)
+  return { ...found, parsed: parse(fitted, { autocorrect: true }), doubtful }
+}
+
+function findMrz(rows: Rows): Found & { printed: Set<string>; doubtful: Set<string> } {
   const lines = rows.map(normalize).filter((l): l is string => l !== null)
+  const printed = printedWords(rows)
   const score = (r: Parsed) => r.details.filter((d) => d.valid).length
-  let best: Parsed | null = null
+  const nameWords = ({ fields: f }: Parsed) => words(`${f.lastName ?? ""} ${f.firstName ?? ""}`)
+  // ponytail: more letters beats fewer because OCR mostly drops letters; a real photo set may show otherwise.
+  const namesQuality = (r: Parsed) => nameWords(r).filter((w) => printed.has(w)).length * 100 + nameWords(r).join("").length
+
+  const attempt = (window: string[], n: number, namesAt: number): Found | null => {
+    try {
+      const parsed = parse(window.map((l) => fitLength(l, n)), { autocorrect: true })
+      // No check digit covers the names, so a line of printed text could pass for them next to a real
+      // line 2: the name line needs its "<<" separator (before fitLength invents one) and a valid document code.
+      if (!window[namesAt].includes("<<") || !parsed.details.find((d) => d.field === "documentCode")?.valid) return null
+      return { parsed, resized: new Set(window.flatMap((l, line) => (l.length === n ? [] : [line]))), window, n }
+    } catch {
+      return null // not this format
+    }
+  }
+
+  let best: Found | null = null
   for (const [n, count] of FORMATS) {
+    const namesAt = count === 3 ? 2 : 0
     for (let i = 0; i + count <= lines.length; i++) {
       const window = lines.slice(i, i + count)
       if (window.some((l) => Math.abs(l.length - n) > 4)) continue
-      try {
-        const r = parse(window.map((l) => fitLength(l, n)), { autocorrect: true })
-        // No check digit covers the names, so a line of printed text could pass for them next to a real
-        // line 2: the name line needs its "<<" separator (before fitLength invents one) and a valid document code.
-        const names = window[count === 3 ? 2 : 0]
-        if (!names.includes("<<") || !r.details.find((d) => d.field === "documentCode")?.valid) continue
-        if (!best || score(r) > score(best)) best = r
-      } catch {
-        // not this format
+      const first = attempt(window, n, namesAt)
+      if (!first) continue
+      // The page and the zoomed band each read the name line, and check digits cannot say which read is right.
+      // A read may lose any number of fillers: fitLength restores them.
+      const reads = lines.filter((l) => l.length <= n + 4)
+      let found = first
+      for (let at = 0; at < count; at++) {
+        for (const line of reads) {
+          const other = attempt(found.window.with(at, line), n, namesAt)
+          if (!other) continue
+          const gain = score(other.parsed) - score(found.parsed)
+          if (at === namesAt ? gain >= 0 && namesQuality(other.parsed) > namesQuality(found.parsed) : gain > 0) found = other
+        }
       }
+      if (!best || score(found.parsed) > score(best.parsed)) best = found
     }
   }
   if (!best) throw new MrzNotFoundError()
-  return best
+  return { ...weighRunnerUps(best, rows.alts ?? {}), printed }
 }
 
 const country = (code: string) => {
@@ -69,8 +154,8 @@ function isoFromMrz(s: string, expiry: boolean, today: Date): string {
   return realIso(`${century + yy}-${s.slice(2, 4)}-${s.slice(4, 6)}`)
 }
 
-export function extract(rows: string[], today = new Date()): { values: Partial<Values>; sources: Sources } {
-  const r = findMrz(rows)
+export function extract(rows: Rows, today = new Date()): { values: Partial<Values>; sources: Sources } {
+  const { parsed: r, resized, printed, doubtful } = findMrz(rows)
   const fields = r.fields as Record<string, string | null | undefined>
   const detail = (field: string) => r.details.find((d) => d.field === field)
   // Invalid fields come back as null; fall back to the raw characters so the user can fix them.
@@ -78,10 +163,18 @@ export function extract(rows: string[], today = new Date()): { values: Partial<V
   const raw = (field: string) => (detail(field)?.ranges[0] as { raw?: string } | undefined)?.raw?.replace(/</g, " ")
   const text = (field: string) => (fields[field] ?? raw(field) ?? "").trim()
   // Needs review if the field or its check digit failed, or the parser had to autocorrect it.
+  // Without a check digit, nothing vouches for a field on a line fitLength had to resize.
   const src = (field: string): Source => {
     const d = detail(field)
     const check = detail(`${field}CheckDigit`)
-    return d?.valid && (check?.valid ?? true) && !d.autocorrect?.length ? "mrz" : "check"
+    const confirmed = check ? check.valid : !resized.has(d?.ranges[0].line ?? -1)
+    return d?.valid && confirmed && !d.autocorrect?.length && !doubtful.has(field) ? "mrz" : "check"
+  }
+
+  // No check digit covers the names, and a misread letter still parses as a name: only the printed page can confirm one.
+  const nameSrc = (field: string): Source => {
+    const name = words(text(field))
+    return name.length && name.every((w) => w.length > 1 && printed.has(w)) ? "mrz" : "check"
   }
 
   const surname = text("lastName")
@@ -105,8 +198,8 @@ export function extract(rows: string[], today = new Date()): { values: Partial<V
     issuedBy: country(text("issuingState")),
   }
   const sources: Sources = {
-    surname: src("lastName"),
-    firstName: src("firstName"),
+    surname: nameSrc("lastName"),
+    firstName: nameSrc("firstName"),
     birthDate: src("birthDate"),
     sex: sex ? src("sex") : "check",
     nationality: src("nationality"),
@@ -128,21 +221,24 @@ export function extract(rows: string[], today = new Date()): { values: Partial<V
   return { values, sources }
 }
 
-// ponytail: heuristic — the issue date is the only printed date that is neither birth nor expiry.
-// Handles dd.mm.yyyy and "dd MON[/MON] yy(yy)" with English month names; anything else stays manual.
+// ponytail: heuristic — the issue date is the only printed date that is neither birth nor expiry, or failing that, the
+// first of those after its English/French label. Handles dd.mm.yyyy and "dd MON[/MON] yy(yy)"; anything else stays manual.
 export function findIssueDate(rows: string[], birth: string, expiry: string): string {
   const text = rows.join("\n").toUpperCase()
-  const found = new Set<string>()
-  for (const [, d, m, y] of text.matchAll(/\b(\d{2})[./\- ](\d{2})[./\- ](\d{4})\b/g)) {
-    if (+m >= 1 && +m <= 12 && +d >= 1 && +d <= 31) found.add(`${y}-${m}-${d}`)
+  const found: { date: string; at: number }[] = []
+  for (const m of text.matchAll(/\b(\d{2})[./\- ](\d{2})[./\- ](\d{4})\b/g)) {
+    const [, d, mm, y] = m
+    if (+mm >= 1 && +mm <= 12 && +d >= 1 && +d <= 31) found.push({ date: `${y}-${mm}-${d}`, at: m.index })
   }
-  for (const [, d, mon, y] of text.matchAll(
-    /\b(\d{1,2})\s*(?:[^\s/\d]{3,4}\.?\s*\/\s*)?([A-Z]{3})\.?(?:\s*\/\s*[^\s/\d]{3,4}\.?)?\s*(\d{4}|\d{2})\b/g,
-  )) {
-    const m = MONTHS.indexOf(mon) + 1
-    if (m) found.add(`${y.length === 2 ? `20${y}` : y}-${String(m).padStart(2, "0")}-${d.padStart(2, "0")}`)
+  for (const m of text.matchAll(/\b(\d{1,2})\s*(?:[^\s/\d]{3,4}\.?\s*\/\s*)?([A-Z]{3})\.?(?:\s*\/\s*[^\s/\d]{3,4}\.?)?\s*(\d{4}|\d{2})\b/g)) {
+    const [, d, mon, y] = m
+    const month = MONTHS.indexOf(mon) + 1
+    if (month) found.push({ date: `${y.length === 2 ? `20${y}` : y}-${String(month).padStart(2, "0")}-${d.padStart(2, "0")}`, at: m.index })
   }
   // realIso drops an OCR misread like 31.02, which the day/month ranges above let through.
-  const rest = [...found].filter((d) => realIso(d) && d > birth && (!expiry || d < expiry))
-  return rest.length === 1 ? rest[0] : ""
+  const rest = found.filter(({ date }) => realIso(date) && date > birth && (!expiry || date < expiry))
+  if (new Set(rest.map((f) => f.date)).size === 1) return rest[0].date
+  const label = text.search(/DATE OF ISSUE|ISSUE DATE|DATE DE D[EÉ]LIVRANCE/)
+  if (label < 0) return ""
+  return rest.filter((f) => f.at > label).sort((a, b) => a.at - b.at)[0]?.date ?? ""
 }
