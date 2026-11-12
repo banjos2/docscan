@@ -263,3 +263,55 @@ test("extract repairs a classic look-alike in a failed field even when the model
   expect(values.docNumber).toBe("C01X00T47")
   expect(sources.docNumber).toBe("check")
 })
+
+// A scan's "I" read as "Z" by the page pass and by the zoom, which also lost the first letter of the name.
+const PAGE_L1 = "P<D<<MUSTERMANN<<ERZKA".padEnd(44, "<")
+const ZOOM_L1 = "P<D<<MUSTERMANN<<RZKA".padEnd(43, "<")
+const misreadName = (zoom: string, runnerUp: Record<number, [string, number]>, printed = ["MUSTERMANN", "ERIKA C"]) =>
+  Object.assign([zoom, L2, PAGE_L1, L2, ...printed], {
+    alts: { [zoom]: [...zoom].map((c, i): [string, number, string, number] => [c, 0.9, runnerUp[i]?.[0] ?? "", runnerUp[i]?.[1] ?? 0]) },
+  })
+const Z_AT = ZOOM_L1.indexOf("Z")
+
+test("extract takes a name's letter from the printed page when the MRZ's runner-up agrees, and asks to review it", () => {
+  const { values, sources } = extract(misreadName(ZOOM_L1, { [Z_AT]: ["I", 0.25] }), TODAY)
+  expect(values.firstName).toBe("ERIKA")
+  expect(sources.firstName).toBe("check")
+  expect(sources.surname).toBe("mrz")
+})
+
+test("extract takes a name's letter from the printed page when another read of the MRZ has it", () => {
+  expect(extract(misreadName(ZOOM_L1.replace("Z", "I"), {}), TODAY).values.firstName).toBe("ERIKA")
+})
+
+test("extract keeps the MRZ's name when no read of the MRZ backs the printed letter", () => {
+  expect(extract(misreadName(ZOOM_L1, {}), TODAY).values.firstName).toBe("ERZKA")
+  expect(extract(misreadName(ZOOM_L1, { [Z_AT]: ["I", 0.01] }), TODAY).values.firstName).toBe("ERZKA")
+  expect(extract(misreadName(ZOOM_L1, { [Z_AT]: ["T", 0.25] }), TODAY).values.firstName).toBe("ERZKA")
+})
+
+test("extract keeps the MRZ's name when two printed words are one letter away", () => {
+  expect(extract(misreadName(ZOOM_L1, { [Z_AT]: ["I", 0.25] }, ["MUSTERMANN", "ERIKA", "ERZKO"]), TODAY).values.firstName).toBe("ERZKA")
+})
+
+test("extract takes the printed name when every read of the MRZ lost a letter of it", () => {
+  const rows = misreadName(ZOOM_L1, { [Z_AT]: ["I", 0.25] }).with(2, ZOOM_L1)
+  expect(extract(Object.assign(rows, { alts: misreadName(ZOOM_L1, { [Z_AT]: ["I", 0.25] }).alts }), TODAY)).toMatchObject({
+    values: { firstName: "ERIKA" },
+    sources: { firstName: "check" },
+  })
+  // A dropped letter alone, with nothing misread.
+  expect(extract(["MUSTERMANN", "ERIKA", CLIPPED, L2], TODAY).values).toMatchObject({ surname: "MUSTERMANN", firstName: "ERIKA" })
+})
+
+test("extract does not take one of the person's names for a misread of another", () => {
+  const ivan = "P<D<<IVANOV<<IVAN".padEnd(44, "<")
+  expect(extract(["IVANOV", ivan, L2], TODAY).values).toMatchObject({ surname: "IVANOV", firstName: "IVAN" })
+  // Nor a longer printed word that would need a letter the MRZ never had removed.
+  expect(extract(["MUSTERMANN", "ERIK", L1, L2], TODAY).values.firstName).toBe("ERIKA")
+})
+
+test("findIssueDate reads a date whose digits the OCR ran together", () => {
+  const rows = ["28041960 1234567A123PB1", "DATE OF ISSUE AUTHORITY", "07 082026 MINISTRY OF", "28.04.2060", "KB12345671BLR6004284F6004284"]
+  expect(findIssueDate(rows, "1960-04-28", "2060-04-28")).toBe("2026-08-07")
+})

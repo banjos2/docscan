@@ -139,6 +139,60 @@ function findMrz(rows: Rows): Found & { printed: Set<string>; doubtful: Set<stri
   return { ...weighRunnerUps(best, rows.alts ?? {}), printed }
 }
 
+// How an OCR read could have turned the printed word into `word`: by dropping letters and by taking one letter for
+// another, two such slips at most. Returns the letters taken for another as [index in word, printed letter], or null
+// when it could not (a read does not add letters).
+function slips(word: string, printedWord: string): [number, string][] | null {
+  const dropped = printedWord.length - word.length
+  if (dropped < 0 || dropped > 2 || word.length < 4) return null
+  let best: [number, string][] | null = null
+  const without = (p: string, drops: number, from: number) => {
+    if (drops) {
+      for (let i = from; i < p.length; i++) without(p.slice(0, i) + p.slice(i + 1), drops - 1, i)
+      return
+    }
+    const swapped = [...word].flatMap((c, i): [number, string][] => (c === p[i] ? [] : [[i, p[i]]]))
+    if (swapped.length + dropped <= 2 && (!best || swapped.length < best.length)) best = swapped
+  }
+  without(printedWord, dropped, 0)
+  return best
+}
+
+// No check digit covers the names, so a misread name still parses as one: a scan's "I" came out as "Z" in every
+// read, and its first letter was lost in some. The printed page spells the name in other print. When exactly one of
+// its words explains the MRZ's word as such a read, the printed word is taken: a dropped letter needs no more
+// proof (it is what OCR does most), a letter taken for another needs a read of the MRZ that backs the printed one
+// (it read it there, or it was a runner-up the model considered). `others` are the MRZ's other name words: IVAN is
+// not a misread IVANOV.
+function repairName(name: string, others: string[], printed: Set<string>, alts: NonNullable<Rows["alts"]>): string {
+  return name.replace(/[A-Z]+/g, (word) => {
+    if (printed.has(word)) return word
+    const near = [...printed].flatMap((p) => {
+      const swapped = p === word || others.includes(p) ? null : slips(word, p)
+      return swapped ? [{ fix: p, swapped }] : []
+    })
+    if (near.length !== 1) return word
+    // The reads differ in length and in what they lost, so a letter is found by its neighbours, not its index:
+    // up to two on each side, three in all where the word has them (a read may have lost one of the four).
+    const backed = ([at, letter]: [number, string]) =>
+      [0, 1, 2].some((l) =>
+        [0, 1, 2].some((r) => {
+          if (l > at || r > word.length - 1 - at || l + r < Math.min(3, word.length - 1)) return false
+          const around = (c: string) => word.slice(at - l, at) + c + word.slice(at + 1, at + 1 + r)
+          return Object.entries(alts).some(([row, chars]) => {
+            if (row.includes(around(letter))) return true
+            for (let i = row.indexOf(around(word[at])); i >= 0; i = row.indexOf(around(word[at]), i + 1)) {
+              const [, , runnerUp, p] = chars[i + l] ?? []
+              if (runnerUp === letter && p >= MIN_RUNNER_UP) return true
+            }
+            return false
+          })
+        }),
+      )
+    return near[0].swapped.every(backed) ? near[0].fix : word
+  })
+}
+
 const country = (code: string) => {
   const name = (states as Record<string, string>)[code]
   return name ? name.replace(/\s*\(the\)$/i, "").toUpperCase() : code
@@ -171,13 +225,14 @@ export function extract(rows: Rows, today = new Date()): { values: Partial<Value
     return d?.valid && confirmed && !d.autocorrect?.length && !doubtful.has(field) ? "mrz" : "check"
   }
 
-  // No check digit covers the names, and a misread letter still parses as a name: only the printed page can confirm one.
-  const nameSrc = (field: string): Source => {
-    const name = words(text(field))
-    return name.length && name.every((w) => w.length > 1 && printed.has(w)) ? "mrz" : "check"
-  }
+  // No check digit covers the names, and a misread letter still parses as a name: only the printed page can confirm
+  // one, and only as the MRZ read it. A name repaired from the printed page is for a person to look at.
+  const nameSrc = (field: string, name: string): Source =>
+    name === text(field) && words(name).length && words(name).every((w) => w.length > 1 && printed.has(w)) ? "mrz" : "check"
 
-  const surname = text("lastName")
+  const read = { surname: text("lastName"), firstName: text("firstName") }
+  const surname = repairName(read.surname, words(read.firstName), printed, rows.alts ?? {})
+  const firstName = repairName(read.firstName, words(read.surname), printed, rows.alts ?? {})
   const nationality = country(text("nationality"))
   const personal = fields.personalNumber !== undefined ? "personalNumber" : "optional2"
   // Anything other than male/female (unspecified, or missing) needs a manual choice, not a guess.
@@ -185,7 +240,7 @@ export function extract(rows: Rows, today = new Date()): { values: Partial<Value
   const values: Partial<Values> = {
     surname,
     surnameAtBirth: surname,
-    firstName: text("firstName"),
+    firstName,
     birthDate: isoFromMrz(text("birthDate"), false, today),
     countryOfBirth: nationality,
     nationality,
@@ -198,8 +253,8 @@ export function extract(rows: Rows, today = new Date()): { values: Partial<Value
     issuedBy: country(text("issuingState")),
   }
   const sources: Sources = {
-    surname: nameSrc("lastName"),
-    firstName: nameSrc("firstName"),
+    surname: nameSrc("lastName", surname),
+    firstName: nameSrc("firstName", firstName),
     birthDate: src("birthDate"),
     sex: sex ? src("sex") : "check",
     nationality: src("nationality"),
@@ -222,11 +277,12 @@ export function extract(rows: Rows, today = new Date()): { values: Partial<Value
 }
 
 // ponytail: heuristic — the issue date is the only printed date that is neither birth nor expiry, or failing that, the
-// first of those after its English/French label. Handles dd.mm.yyyy and "dd MON[/MON] yy(yy)"; anything else stays manual.
+// first of those after its English/French label. Handles dd.mm.yyyy (with or without its separators) and "dd MON[/MON] yy(yy)"; anything else stays manual.
 export function findIssueDate(rows: string[], birth: string, expiry: string): string {
   const text = rows.join("\n").toUpperCase()
   const found: { date: string; at: number }[] = []
-  for (const m of text.matchAll(/\b(\d{2})[./\- ](\d{2})[./\- ](\d{4})\b/g)) {
+  // The separators are optional: OCR runs the spaced digits of a scan together ("07 082026").
+  for (const m of text.matchAll(/\b(\d{2})[./\- ]?(\d{2})[./\- ]?(\d{4})\b/g)) {
     const [, d, mm, y] = m
     if (+mm >= 1 && +mm <= 12 && +d >= 1 && +d <= 31) found.push({ date: `${y}-${mm}-${d}`, at: m.index })
   }
