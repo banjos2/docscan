@@ -12,6 +12,22 @@
 	}
 	redir @guest /login.html
 
+	# The app talks to its own origin and to nothing else: a photo, the text read from it and the filled form have
+	# nowhere to go, even if a dependency turns hostile. The OCR and the PDF reader compile WebAssembly, and OpenCV.js
+	# inside the OCR builds its bindings with eval; the photo, the filled form and its preview are blob: URLs.
+	@app not path /login.html
+	header @app Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self' data:; connect-src 'self' blob: data:; worker-src 'self' blob:; frame-src blob:; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+	# The login page carries its own script and styles inline, and loads nothing.
+	header /login.html Content-Security-Policy "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+		# Browsers heed this over HTTPS only, which the proxy in front provides.
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+
 	# Pages must come back here on every visit: a cached index.html would open the app without the cookie check.
 	@page path / /index.html /login.html
 	header @page Cache-Control "no-cache"
@@ -20,4 +36,5 @@
 	header /assets/* Cache-Control "public, max-age=31536000, immutable"
 	header /models/* Cache-Control "public, max-age=604800"
 	header /ort/* Cache-Control "public, max-age=604800"
+	header /pdfjs/* Cache-Control "public, max-age=604800"
 }

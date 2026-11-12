@@ -6,10 +6,12 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { emptyValues, type Sources, type Values } from "@/lib/anketa"
-import { heicToJpeg, isHeic } from "@/lib/heic"
-import { extract, MrzNotFoundError } from "@/lib/mrz"
-import { preloadOcr, recognize, turnOver } from "@/lib/ocr"
+import { isHeic } from "@/lib/heic"
+import { MrzNotFoundError } from "@/lib/mrz"
+import { preloadOcr } from "@/lib/ocr"
+import { isPdf } from "@/lib/pdf"
 import { applyQuestionnaire, QUESTIONNAIRES, type Questionnaire } from "@/lib/questionnaire"
+import { imagesOf, readMrz } from "@/lib/scan"
 import { validate } from "@/lib/validate"
 
 export function App() {
@@ -45,36 +47,34 @@ export function App() {
       return url
     })
 
+  const showPhoto = (image: Blob) =>
+    setPhoto((old) => {
+      if (old) URL.revokeObjectURL(old)
+      return URL.createObjectURL(image)
+    })
+
   async function scan(file: File) {
     if (busy) return
     setOcrError(null)
-    let image: Blob = file
-    if (isHeic(file)) {
-      setBusy("Открываю HEIC…")
+    setBusy(isPdf(file) ? "Открываю PDF…" : isHeic(file) ? "Открываю HEIC…" : "Загружаю модель распознавания…")
+    try {
+      let images: Blob[]
       try {
-        image = await heicToJpeg(file)
+        images = await imagesOf(file)
       } catch (e) {
         console.error(e)
-        setOcrError("Не получилось открыть HEIC-файл. Сохраните фото как JPG и загрузите снова.")
-        setBusy(null)
+        setOcrError(
+          isPdf(file)
+            ? "Не получилось открыть PDF. Если файл защищён паролем, сохраните страницу паспорта как JPG и загрузите снова."
+            : "Не получилось открыть HEIC-файл. Сохраните фото как JPG и загрузите снова.",
+        )
         return
       }
-    }
-    const url = URL.createObjectURL(image)
-    setPhoto((old) => {
-      if (old) URL.revokeObjectURL(old)
-      return url
-    })
-    setBusy("Загружаю модель распознавания…")
-    try {
-      const found = await recognize(image, () => setBusy("Распознаю документ…"))
-        .then(extract)
-        .catch(async (e) => {
-          if (!(e instanceof MrzNotFoundError)) throw e
-          // Upside down, or turned 270°: one more pass on the photo turned over (90° is read as is).
-          setBusy("Переворачиваю фото и распознаю ещё раз…")
-          return extract(await recognize(await turnOver(image)))
-        })
+      showPhoto(images[0])
+      setBusy("Загружаю модель распознавания…")
+      const found = await readMrz(images, setBusy)
+      // A PDF's MRZ may sit on a later page: show the page that was read.
+      if (found.image !== images[0]) showPhoto(found.image)
       setValues((v) => ({ ...v, ...found.values }))
       setSources(found.sources)
       replacePdf(null)
@@ -130,7 +130,7 @@ export function App() {
         <p className="font-display text-sm font-medium text-flame-ink">Шенгенская анкета</p>
         <h1 className="font-display text-3xl font-semibold tracking-tight">DocScan</h1>
         <p className="max-w-prose text-muted-foreground">
-          Загрузите фото паспорта или ID-карты: данные из MRZ попадут в анкету. Проверьте их, дополните и скачайте готовый
+          Загрузите фото или скан паспорта или ID-карты: данные из MRZ попадут в анкету. Проверьте их, дополните и скачайте готовый
           PDF.
         </p>
       </header>

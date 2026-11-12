@@ -35,18 +35,29 @@ export async function recognize(image: Blob | ImageBitmap, onModelReady?: () => 
   const ocr = await getEngine()
   onModelReady?.()
   const photo = image instanceof Blob ? await createImageBitmap(image) : image
+  // The page pass finds the MRZ and reads the printed words, which a smaller copy does as well and sooner
+  // (the detector works at 960 px anyway). The MRZ itself is then cut from the full photo.
+  const k = Math.max(photo.width, photo.height) / PAGE_SIDE
+  const page =
+    k > 1 ? await createImageBitmap(photo, { resizeWidth: Math.round(photo.width / k), resizeHeight: Math.round(photo.height / k), resizeQuality: "high" }) : photo
   try {
-    const [page] = await ocr.predict(photo)
-    const band = mrzBand(page.items)
-    if (!band) return groupRows(page.items)
+    const [{ items: found }] = await ocr.predict(page)
+    const [kx, ky] = [photo.width / page.width, photo.height / page.height]
+    const items = found.map((i: Item) => ({ ...i, poly: i.poly.map(([x, y]) => [x * kx, y * ky] as [number, number]) }))
+    const band = mrzBand(items)
+    if (!band) return groupRows(items)
     // The band's rows go first; the page rows still carry the printed issue date.
     const [zoom] = await ocr.predict(cut(photo, band))
     const read = readBand(zoom.items)
-    return Object.assign([...read, ...groupRows(page.items)], { alts: read.alts })
+    return Object.assign([...read, ...groupRows(items)], { alts: read.alts })
   } finally {
+    if (page !== photo) page.close()
     if (photo !== image) photo.close()
   }
 }
+
+// ponytail: 2400 px kept the printed words of every sample tried, a two-page spread included; lower it if photos allow.
+const PAGE_SIDE = 2400
 
 // x, y, w, h are in the frame turned along the MRZ, whose x axis is the unit vector (ux, uy).
 type Band = { x: number; y: number; w: number; h: number; scale: number; ux: number; uy: number }
@@ -60,14 +71,22 @@ function looksMrz(text: string) {
 // Thin MRZ print on a small photo loses characters at page scale (a Belarusian sample kept 15 of the 44 in
 // line 1), so the MRZ is read again on its own: its boxes plus a line of margin, for a line the detector missed.
 export function mrzBand(items: Item[]): Band | null {
-  const mrz = items.filter((i) => looksMrz(i.text))
-  const boxes = mrz.map((i) => i.poly)
-  if (!boxes.length) return null
+  const all = items.filter((i) => looksMrz(i.text))
+  if (!all.length) return null
   // A box's short side is the line height, whichever way the photo is turned.
-  const line = Math.max(...boxes.map(([a, b, c]) => Math.min(Math.hypot(b[0] - a[0], b[1] - a[1]), Math.hypot(c[0] - b[0], c[1] - b[1]))))
-  const [ux, uy] = textDirection(mrz)
+  const height = ({ poly: [a, b, c] }: Item) => Math.min(Math.hypot(b[0] - a[0], b[1] - a[1]), Math.hypot(c[0] - b[0], c[1] - b[1]))
+  // A printed line without spaces looks like a filler-less line 2, and one such box elsewhere on the page stretches
+  // the band over all of it. Fillers are the mark of the MRZ: a box without them counts only next to one with them.
+  const fillers = all.filter((i) => i.text.includes("<"))
+  const [ux, uy] = textDirection(fillers.length ? fillers : all)
+  const across = (i: Item) => i.poly.map(([px, py]) => py * ux - px * uy)
+  const near = fillers.flatMap(across)
+  const reach = 3 * Math.max(0, ...fillers.map(height))
+  const mrz = fillers.length ? all.filter((i) => i.text.includes("<") || across(i).every((v) => v > Math.min(...near) - reach && v < Math.max(...near) + reach)) : all
+  const boxes = mrz.map((i) => i.poly)
+  const line = Math.max(...mrz.map(height))
   const us = boxes.flat().map(([px, py]) => px * ux + py * uy)
-  const vs = boxes.flat().map(([px, py]) => py * ux - px * uy)
+  const vs = mrz.flatMap(across)
   const x = Math.min(...us) - line
   // MRZ lines sit about two line heights apart: this margin must reach a line the detector missed.
   const y = Math.min(...vs) - 2.5 * line

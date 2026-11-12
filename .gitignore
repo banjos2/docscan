@@ -15,6 +15,7 @@ dist-ssr
 # Fetched by scripts/fetch_assets.sh, not committed (large binaries).
 public/models/
 public/ort/
+public/pdfjs/
 
 # Editor directories and files
 .vscode/*

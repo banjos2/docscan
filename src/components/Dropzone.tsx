@@ -3,10 +3,11 @@ import { CircleAlert, LoaderCircle } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { isHeic } from "@/lib/heic"
+import { isPdf } from "@/lib/pdf"
 import { cn } from "@/lib/utils"
 
 const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/webp"]
-const UNSUPPORTED_FORMAT_MESSAGE = "Поддерживаются JPG, PNG, WebP и HEIC. Сохраните фото в одном из этих форматов."
+const UNSUPPORTED_FORMAT_MESSAGE = "Поддерживаются JPG, PNG, WebP, HEIC и PDF. Сохраните фото в одном из этих форматов."
 
 type Props = {
   photo: string | null
@@ -23,7 +24,7 @@ export function Dropzone({ photo, busy, error, onFile }: Props) {
     if (busy) return
     const file = files?.[0]
     if (!file) return
-    if (!ACCEPTED_TYPES.includes(file.type) && !isHeic(file)) {
+    if (!ACCEPTED_TYPES.includes(file.type) && !isHeic(file) && !isPdf(file)) {
       setFormatError(UNSUPPORTED_FORMAT_MESSAGE)
       return
     }
@@ -53,7 +54,7 @@ export function Dropzone({ photo, busy, error, onFile }: Props) {
         <input
           ref={input}
           type="file"
-          accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif"
+          accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif,application/pdf,.pdf"
           className="sr-only"
           disabled={!!busy}
           onChange={(e) => {
@@ -67,10 +68,10 @@ export function Dropzone({ photo, busy, error, onFile }: Props) {
           <>
             <PassportPage />
             {/* A finger can't drag a file: touch screens get the camera and the gallery instead. */}
-            <p className="font-medium pointer-coarse:hidden">Перетащите фото паспорта или ID‑карты</p>
-            <p className="text-sm pointer-coarse:hidden">или нажмите, чтобы выбрать файл: JPG, PNG, WebP, HEIC</p>
+            <p className="font-medium pointer-coarse:hidden">Перетащите фото или скан паспорта или ID‑карты</p>
+            <p className="text-sm pointer-coarse:hidden">или нажмите, чтобы выбрать файл: JPG, PNG, WebP, HEIC, PDF</p>
             <p className="hidden font-medium pointer-coarse:block">Сфотографируйте паспорт или ID‑карту</p>
-            <p className="hidden text-sm pointer-coarse:block">или выберите фото в галерее: JPG, PNG, WebP, HEIC</p>
+            <p className="hidden text-sm pointer-coarse:block">или выберите фото или PDF‑скан: JPG, PNG, WebP, HEIC, PDF</p>
           </>
         )}
         {busy && (

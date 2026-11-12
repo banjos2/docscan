@@ -2,6 +2,7 @@ node_modules
 dist
 public/models
 public/ort
+public/pdfjs
 .git
 .superpowers
 .claude

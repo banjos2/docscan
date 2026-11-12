@@ -50,3 +50,10 @@ test("mrzBand follows a tilted MRZ instead of framing it with the page axes", ()
   expect(band?.h).toBeCloseTo(120)
   expect(band?.w).toBeCloseTo(540)
 })
+
+test("mrzBand leaves out a spaceless printed line far from the MRZ", () => {
+  const mrz = [item(10, 400, 500, "P<UTOERIKSSON<<ANNA<MARIA<<<<<<<<<"), item(10, 440, 500, "L898902C36UTO7408122F1204159ZE184226B")]
+  const far = item(10, 40, 500, "REPUBLICOFUTOPIAPASSPORTOFFICE")
+  expect(mrzBand([far, ...mrz])).toEqual(mrzBand(mrz))
+  expect(mrzBand(mrz)?.h).toBeCloseTo(160)
+})

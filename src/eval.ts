@@ -1,23 +1,13 @@
 import { score, type Case } from "@/lib/eval"
-import { heicToJpeg, isHeic } from "@/lib/heic"
-import { extract, MrzNotFoundError } from "@/lib/mrz"
-import { recognize, turnOver } from "@/lib/ocr"
+import { imagesOf, readMrz } from "@/lib/scan"
 
 const input = document.querySelector("input")!
 const out = document.querySelector("pre")!
 
-// The same passes as App's scan(). A photo that breaks the OCR counts as rejected.
+// The same passes as App's scan(). A photo that breaks the OCR or shows no MRZ counts as rejected.
 async function read(file: File): Promise<string[] | null> {
   try {
-    const image = isHeic(file) ? await heicToJpeg(file) : file
-    const rows = await recognize(image)
-    try {
-      extract(rows)
-      return rows
-    } catch (e) {
-      if (!(e instanceof MrzNotFoundError)) throw e
-      return await recognize(await turnOver(image))
-    }
+    return (await readMrz(await imagesOf(file))).rows
   } catch {
     return null
   }
