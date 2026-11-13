@@ -117,7 +117,9 @@ function findMrz(rows: Rows): Found & { printed: Set<string>; doubtful: Set<stri
     const namesAt = count === 3 ? 2 : 0
     for (let i = 0; i + count <= lines.length; i++) {
       const window = lines.slice(i, i + count)
-      if (window.some((l) => Math.abs(l.length - n) > 4)) continue
+      // The name line may be the only read of it and short of any number of fillers, which fitLength restores (a
+      // photocopy's line 1 came back with 12 of its 25); the lines under check digits may not stray that far.
+      if (window.some((l, at) => (at === namesAt ? l.length > n + 4 : Math.abs(l.length - n) > 4))) continue
       const first = attempt(window, n, namesAt)
       if (!first) continue
       // The page and the zoomed band each read the name line, and check digits cannot say which read is right.

@@ -62,6 +62,14 @@ test("extract accepts a fuller name line even if that read lost many fillers", (
   expect(extract([CLIPPED, L2, "P<D<<MUSTERMANN<<ERIKA<<<<<<<<", L2], TODAY).values).toMatchObject({ surname: "MUSTERMANN", firstName: "ERIKA" })
 })
 
+test("extract reads a name line that lost many fillers when it is the only read of it", () => {
+  // A photocopy: the page pass missed line 1 altogether and its zoomed read kept 9 of the 22 fillers.
+  const { values, sources } = extract(["MUSTERMANN", "ERIKA", "P<D<<MUSTERMANN<<ERIKA<<<<<<<<<", L2], TODAY)
+  expect(values).toMatchObject({ surname: "MUSTERMANN", firstName: "ERIKA", docNumber: "C01X00T47", issuedBy: "GERMANY" })
+  // The printed page confirms the names; nothing confirms the rest of a line that had to be resized.
+  expect(sources).toMatchObject({ surname: "mrz", firstName: "mrz", issuedBy: "check", docNumber: "mrz" })
+})
+
 test("extract pairs the best name line with the best line 2 from different reads", () => {
   // The first read has the whole name but a line 2 with a failed birth date; the second read the other way round.
   const brokenL2 = L2.replace("6408125", "6408135")

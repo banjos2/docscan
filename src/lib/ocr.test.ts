@@ -53,7 +53,15 @@ test("mrzBand follows a tilted MRZ instead of framing it with the page axes", ()
 
 test("mrzBand leaves out a spaceless printed line far from the MRZ", () => {
   const mrz = [item(10, 400, 500, "P<UTOERIKSSON<<ANNA<MARIA<<<<<<<<<"), item(10, 440, 500, "L898902C36UTO7408122F1204159ZE184226B")]
-  const far = item(10, 40, 500, "REPUBLICOFUTOPIAPASSPORTOFFICE")
+  const far = item(10, 40, 500, "UTOPIAPASSPORTOFFICE0123456789")
   expect(mrzBand([far, ...mrz])).toEqual(mrzBand(mrz))
   expect(mrzBand(mrz)?.h).toBeCloseTo(160)
+})
+
+test("mrzBand does not take a printed label read without its spaces for a filler-less line 2", () => {
+  // A photocopy whose line 1 the page pass missed: no box has fillers to tell the MRZ by.
+  const line2 = item(10, 440, 500, "L898902C36UTO7408122F1204159ZE184226B1234510")
+  const label = item(10, 200, 200, "MESTANARODZHENNYAPLACEOFBIRTH")
+  expect(mrzBand([label, line2])).toEqual(mrzBand([line2]))
+  expect(mrzBand([label])).toBeNull()
 })

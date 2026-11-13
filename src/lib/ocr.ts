@@ -47,7 +47,7 @@ export async function recognize(image: Blob | ImageBitmap, onModelReady?: () => 
     const band = mrzBand(items)
     if (!band) return groupRows(items)
     // The band's rows go first; the page rows still carry the printed issue date.
-    const [zoom] = await ocr.predict(cut(photo, band))
+    const [zoom] = await ocr.predict(cut(photo, band), { textDetBoxThresh: BAND_BOX_THRESH })
     const read = readBand(zoom.items)
     return Object.assign([...read, ...groupRows(items)], { alts: read.alts })
   } finally {
@@ -59,13 +59,21 @@ export async function recognize(image: Blob | ImageBitmap, onModelReady?: () => 
 // ponytail: 2400 px kept the printed words of every sample tried, a two-page spread included; lower it if photos allow.
 const PAGE_SIDE = 2400
 
+// The detector scores a box by how sure it is of the print inside, and drops it under 0.6. A name line is mostly thin
+// fillers: on a photocopy it scored less, and was dropped on the page and in the band alike. The band holds nothing
+// but the MRZ, so a faint box there is a line of it.
+// ponytail: 0.3 found the line on the one photocopy seen; the page pass keeps 0.6, where faint boxes are background.
+const BAND_BOX_THRESH = 0.3
+
 // x, y, w, h are in the frame turned along the MRZ, whose x axis is the unit vector (ux, uy).
 type Band = { x: number; y: number; w: number; h: number; scale: number; ux: number; uy: number }
 
-// MRZ boxes hold fillers, or a long unbroken run of capitals and digits (line 2 may have no fillers at all).
+// MRZ boxes hold fillers, or a long unbroken run of capitals and digits (line 2 may have no fillers at all). Its
+// dates and check digits make such a line a third digits or more, which a printed label read without its spaces is not.
+// ponytail: a quarter leaves room for digits misread as letters; a filler-less TD1 line 1 with fewer is found by its neighbours.
 function looksMrz(text: string) {
   const s = text.replace(/\s/g, "")
-  return /^[A-Z0-9<]+$/.test(s) && (s.includes("<") || s.length >= 25)
+  return /^[A-Z0-9<]+$/.test(s) && (s.includes("<") || (s.length >= 25 && (s.match(/\d/g)?.length ?? 0) * 4 >= s.length))
 }
 
 // Thin MRZ print on a small photo loses characters at page scale (a Belarusian sample kept 15 of the 44 in
