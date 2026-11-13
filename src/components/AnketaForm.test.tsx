@@ -26,3 +26,14 @@ test("a choice kept from another questionnaire that this blank can't tick shows 
   const trigger = /<button[^>]*id="field-sex"[^>]*>(.*?)<\/button>/.exec(render({ ...SPECIMEN, sex: "X" }, "pl-guest-d"))?.[1] ?? ""
   expect(trigger).toContain("Выберите")
 })
+
+test("the booking upload shows where the host is a hotel, and marks what a file filled in", () => {
+  const booking = { busy: false, error: null, onFile: () => {} }
+  const form = (values: Values, id: string) =>
+    renderToStaticMarkup(
+      <AnketaForm values={values} sources={{}} filled={{ hotelName: "check" }} booking={booking} errors={{}} questionnaire={Q(id)} onChange={() => {}} onQuestionnaire={() => {}} />,
+    )
+  expect(form({ ...SPECIMEN, hostKind: "hotel" }, "es")).toContain("Загрузить бронь")
+  expect(form({ ...SPECIMEN, hostKind: "person" }, "es")).not.toContain("Загрузить бронь")
+  expect(form({ ...SPECIMEN, hostKind: "hotel" }, "es").match(/проверьте/g)).toHaveLength(1)
+})

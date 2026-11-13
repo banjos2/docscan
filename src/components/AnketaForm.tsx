@@ -1,6 +1,8 @@
-import type { ReactNode } from "react"
+import { useRef, type ReactNode } from "react"
+import { FileUp, LoaderCircle } from "lucide-react"
 import { DateField } from "@/components/DateField"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
@@ -25,7 +27,7 @@ type Field = {
   hint?: PrintKey
 }
 
-const SECTIONS: { title: string; description: string; fromDoc?: boolean; fields: Field[] }[] = [
+const SECTIONS: { title: string; description: string; fromDoc?: boolean; booking?: boolean; fields: Field[] }[] = [
   {
     title: "Из документа",
     description: "Пункты 1–16. Заполняются из MRZ, остальное введите вручную.",
@@ -111,6 +113,7 @@ const SECTIONS: { title: string; description: string; fromDoc?: boolean; fields:
   {
     title: "Приглашающая сторона",
     description: "Необязательные поля: частное лицо или гостиница, и организация.",
+    booking: true,
     fields: [
       { key: "hostKind", label: "Кто приглашает", type: "select", options: () => HOST_KIND, wide: true },
       { key: "hostSurname", label: "Фамилия" },
@@ -162,16 +165,22 @@ function subNumbered(fields: Labelled[]): Labelled[] {
   })
 }
 
+// A hotel booking read into the form: the state of the last file given.
+export type Booking = { busy: boolean; error: string | null; onFile: (file: File) => void }
+
 type Props = {
   values: Values
   sources: Sources
+  // What other files than the passport filled in, marked for a look until edited.
+  filled?: Sources
+  booking?: Booking
   errors: Errors
   questionnaire: Questionnaire
   onChange: (key: keyof Values, value: string | string[]) => void
   onQuestionnaire: (q: Questionnaire) => void
 }
 
-export function AnketaForm({ values, sources, errors, questionnaire, onChange, onQuestionnaire }: Props) {
+export function AnketaForm({ values, sources, filled = {}, booking, errors, questionnaire, onChange, onQuestionnaire }: Props) {
   const scanned = Object.keys(sources).length > 0
   const printed = printedText(values, questionnaire)
   return (
@@ -211,6 +220,7 @@ export function AnketaForm({ values, sources, errors, questionnaire, onChange, o
               <CardDescription>{[itemsNote(numbers), s.description].filter(Boolean).join(". ")}</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-x-4 gap-y-5 sm:grid-cols-2">
+              {s.booking && booking && visible("hotelName", values, items) && <BookingUpload {...booking} />}
               {subNumbered(labelled).map((f) => (
                 <FieldRow
                   key={f.key}
@@ -219,7 +229,7 @@ export function AnketaForm({ values, sources, errors, questionnaire, onChange, o
                   questionnaire={questionnaire}
                   printed={printed}
                   error={errors[f.key]}
-                  badge={s.fromDoc && scanned ? <SourceBadge source={sources[f.key]} /> : null}
+                  badge={s.fromDoc && scanned ? <SourceBadge source={sources[f.key]} /> : filled[f.key] ? <SourceBadge source={filled[f.key]} /> : null}
                   onChange={onChange}
                 />
               ))}
@@ -228,6 +238,37 @@ export function AnketaForm({ values, sources, errors, questionnaire, onChange, o
         )
       })}
     </>
+  )
+}
+
+function BookingUpload({ busy, error, onFile }: Booking) {
+  const input = useRef<HTMLInputElement>(null)
+  return (
+    <div className="flex flex-col gap-2 sm:col-span-2">
+      <input
+        ref={input}
+        type="file"
+        accept="application/pdf,.pdf"
+        className="sr-only"
+        tabIndex={-1}
+        aria-hidden
+        onChange={(e) => {
+          const file = e.target.files?.[0]
+          if (file) onFile(file)
+          e.target.value = ""
+        }}
+      />
+      <Button variant="outline" className="self-start" disabled={busy} aria-describedby="booking-note" onClick={() => input.current?.click()}>
+        {busy ? <LoaderCircle className="animate-spin" aria-hidden /> : <FileUp aria-hidden />}
+        {busy ? "Читаю бронь…" : "Загрузить бронь"}
+      </Button>
+      <p id="booking-note" className="text-xs text-muted-foreground">
+        Подтверждение Booking.com в PDF: название гостиницы, адрес, телефон и даты проживания попадут в анкету.
+      </p>
+      <p role="alert" className="text-xs text-destructive empty:hidden">
+        {error}
+      </p>
+    </div>
   )
 }
 

@@ -7,8 +7,9 @@ export const isPdf = (file: File) => file.type === "application/pdf" || /\.pdf$/
 const SIDE = 3000
 const MAX_PAGES = 6
 
-// One image per page, in page order.
-export async function pdfPages(file: Blob): Promise<Blob[]> {
+type Doc = Awaited<ReturnType<typeof import("pdfjs-dist").getDocument>["promise"]>
+
+async function withDoc<T>(file: Blob, read: (doc: Doc) => Promise<T>): Promise<T> {
   const [pdfjs, worker] = await Promise.all([import("pdfjs-dist"), import("pdfjs-dist/build/pdf.worker.min.mjs?url")])
   pdfjs.GlobalWorkerOptions.workerSrc = worker.default
   const task = pdfjs.getDocument({
@@ -17,7 +18,15 @@ export async function pdfPages(file: Blob): Promise<Blob[]> {
     wasmUrl: new URL(`${import.meta.env.BASE_URL}pdfjs/`, location.href).href,
   })
   try {
-    const doc = await task.promise
+    return await read(await task.promise)
+  } finally {
+    await task.destroy()
+  }
+}
+
+// One image per page, in page order.
+export const pdfPages = (file: Blob) =>
+  withDoc(file, async (doc) => {
     const pages: Blob[] = []
     for (let n = 1; n <= Math.min(doc.numPages, MAX_PAGES); n++) {
       const page = await doc.getPage(n)
@@ -30,7 +39,23 @@ export async function pdfPages(file: Blob): Promise<Blob[]> {
       pages.push(await new Promise<Blob>((done, fail) => canvas.toBlob((b) => (b ? done(b) : fail(new Error("No page image."))), "image/jpeg", 0.92)))
     }
     return pages
-  } finally {
-    await task.destroy()
-  }
-}
+  })
+
+// The text of a PDF made by a program (a scan has none: ""), in the order the file draws it, a line per baseline.
+// That order keeps a label next to its value where reading the page row by row would mix its columns.
+export const pdfText = (file: Blob) =>
+  withDoc(file, async (doc) => {
+    const lines: string[] = []
+    for (let n = 1; n <= Math.min(doc.numPages, MAX_PAGES); n++) {
+      const { items } = await (await doc.getPage(n)).getTextContent()
+      let last: number | null = null
+      for (const item of items) {
+        if (!("str" in item) || !item.str.trim()) continue
+        const y = Math.round(item.transform[5])
+        if (y === last) lines[lines.length - 1] += ` ${item.str.trim()}`
+        else lines.push(item.str.trim())
+        last = y
+      }
+    }
+    return lines.join("\n")
+  })

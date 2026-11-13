@@ -9,7 +9,8 @@ import { emptyValues, type Sources, type Values } from "@/lib/anketa"
 import { isHeic } from "@/lib/heic"
 import { MrzNotFoundError } from "@/lib/mrz"
 import { preloadOcr } from "@/lib/ocr"
-import { isPdf } from "@/lib/pdf"
+import { BookingNotFoundError, parseBooking } from "@/lib/booking"
+import { isPdf, pdfText } from "@/lib/pdf"
 import { applyQuestionnaire, QUESTIONNAIRES, type Questionnaire } from "@/lib/questionnaire"
 import { imagesOf, readMrz } from "@/lib/scan"
 import { validate } from "@/lib/validate"
@@ -18,6 +19,9 @@ export function App() {
   const [questionnaire, setQuestionnaire] = useState(QUESTIONNAIRES[0])
   const [values, setValues] = useState<Values>(() => ({ ...emptyValues(), ...QUESTIONNAIRES[0].presets }))
   const [sources, setSources] = useState<Sources>({})
+  const [filled, setFilled] = useState<Sources>({})
+  const [bookingBusy, setBookingBusy] = useState(false)
+  const [bookingError, setBookingError] = useState<string | null>(null)
   const [photo, setPhoto] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const [ocrError, setOcrError] = useState<string | null>(null)
@@ -91,9 +95,29 @@ export function App() {
     }
   }
 
+  async function readBooking(file: File) {
+    setBookingError(null)
+    setBookingBusy(true)
+    try {
+      if (!isPdf(file)) throw new BookingNotFoundError()
+      const found = parseBooking(await pdfText(file))
+      setValues((v) => ({ ...v, ...found }))
+      // Hotel dates are not always the dates of the trip, and the address may hold Cyrillic: all of it is for a look.
+      setFilled((s) => ({ ...s, ...Object.fromEntries(Object.keys(found).flatMap((k) => (k === "hostKind" ? [] : [[k, "check"]]))) }))
+      replacePdf(null)
+      setPdfError(null)
+    } catch (e) {
+      console.error(e)
+      setBookingError(e instanceof BookingNotFoundError ? e.message : "Не получилось открыть файл. Если PDF защищён паролем, введите данные гостиницы вручную.")
+    } finally {
+      setBookingBusy(false)
+    }
+  }
+
   function change(key: keyof Values, value: string | string[]) {
     setValues((v) => ({ ...v, [key]: value, ...(key === "payer" ? { means: [] } : {}) }))
     setSources((s) => (key in s ? { ...s, [key]: "manual" } : s))
+    setFilled((s) => (key in s ? { ...s, [key]: "manual" } : s))
     replacePdf(null)
     setPdfError(null)
   }
@@ -143,6 +167,8 @@ export function App() {
           <AnketaForm
             values={values}
             sources={sources}
+            filled={filled}
+            booking={{ busy: bookingBusy, error: bookingError, onFile: readBooking }}
             errors={submitted ? errors : {}}
             questionnaire={questionnaire}
             onChange={change}
