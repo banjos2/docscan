@@ -70,6 +70,16 @@ test("extract reads a name line that lost many fillers when it is the only read 
   expect(sources).toMatchObject({ surname: "mrz", firstName: "mrz", issuedBy: "check", docNumber: "mrz" })
 })
 
+test("extract does not take a filler misread as a letter for one more given name", () => {
+  // The names end at their second "<<": the "S" five fillers later is a filler the OCR took for a letter.
+  const stray = "P<D<<MUSTERMANN<<ERIKA<<<<<S".padEnd(44, "<")
+  const { values, sources } = extract(["MUSTERMANN", "ERIKA", stray, L2], TODAY)
+  expect(values).toMatchObject({ surname: "MUSTERMANN", firstName: "ERIKA" })
+  expect(sources).toMatchObject({ surname: "mrz", firstName: "mrz" })
+  // A second given name sits one filler away and stays.
+  expect(extract(["P<D<<MUSTERMANN<<ERIKA<S".padEnd(44, "<"), L2], TODAY).values.firstName).toBe("ERIKA S")
+})
+
 test("extract pairs the best name line with the best line 2 from different reads", () => {
   // The first read has the whole name but a line 2 with a failed birth date; the second read the other way round.
   const brokenL2 = L2.replace("6408125", "6408135")

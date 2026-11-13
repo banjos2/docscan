@@ -35,7 +35,19 @@ function fitLength(s: string, n: number): string {
   return s.slice(0, at) + "<".repeat(len) + s.slice(at + run[0].length)
 }
 
-type Found = { parsed: Parsed; resized: Set<number>; window: string[]; n: number }
+// The names end at their second "<<" (the first parts the surname from the given names). What follows is fillers, and
+// a letter there is a filler misread: it would parse as one more given name. `from` skips the issuing state's fillers.
+function clearAfterNames(line: string, from: number): string {
+  const parts = line.indexOf("<<", from)
+  const end = parts < 0 ? -1 : line.indexOf("<<", parts + 2)
+  return end < 0 ? line : line.slice(0, end) + "<".repeat(line.length - end)
+}
+
+type Found = { parsed: Parsed; resized: Set<number>; window: string[]; n: number; namesAt: number }
+
+// The lines as the parser takes them. The name line of a passport starts with the document code and the state.
+const fit = ({ window, n, namesAt }: Pick<Found, "window" | "n" | "namesAt">) =>
+  window.map((l, at) => fitLength(at === namesAt ? clearAfterNames(l, namesAt ? 0 : 5) : l, n))
 
 const words = (s: string) => s.split(/[^A-Z]+/).filter(Boolean)
 
@@ -56,7 +68,7 @@ const passes = (text: string, digit: string) =>
 // Check digits see only one thing: the sum. So a runner-up that also satisfies one is evidence of doubt about a field
 // that passed, and the only way to repair a field that failed: when exactly one does. Either way a person must look.
 function weighRunnerUps(found: Found, alts: NonNullable<Rows["alts"]>): Found & { doubtful: Set<string> } {
-  const fitted = found.window.map((l) => fitLength(l, found.n))
+  const fitted = fit(found)
   const doubtful = new Set<string>()
   const fixes: { line: number; at: number; char: string }[] = []
   for (const field of CHECKED_FIELDS) {
@@ -102,11 +114,11 @@ function findMrz(rows: Rows): Found & { printed: Set<string>; doubtful: Set<stri
 
   const attempt = (window: string[], n: number, namesAt: number): Found | null => {
     try {
-      const parsed = parse(window.map((l) => fitLength(l, n)), { autocorrect: true })
+      const parsed = parse(fit({ window, n, namesAt }), { autocorrect: true })
       // No check digit covers the names, so a line of printed text could pass for them next to a real
       // line 2: the name line needs its "<<" separator (before fitLength invents one) and a valid document code.
       if (!window[namesAt].includes("<<") || !parsed.details.find((d) => d.field === "documentCode")?.valid) return null
-      return { parsed, resized: new Set(window.flatMap((l, line) => (l.length === n ? [] : [line]))), window, n }
+      return { parsed, resized: new Set(window.flatMap((l, line) => (l.length === n ? [] : [line]))), window, n, namesAt }
     } catch {
       return null // not this format
     }

@@ -41,7 +41,7 @@ export async function recognize(image: Blob | ImageBitmap, onModelReady?: () => 
   const page =
     k > 1 ? await createImageBitmap(photo, { resizeWidth: Math.round(photo.width / k), resizeHeight: Math.round(photo.height / k), resizeQuality: "high" }) : photo
   try {
-    const [{ items: found }] = await ocr.predict(page)
+    const [{ items: found }] = await ocr.predict(page, { textDetBoxThresh: PAGE_BOX_THRESH })
     const [kx, ky] = [photo.width / page.width, photo.height / page.height]
     const items = found.map((i: Item) => ({ ...i, poly: i.poly.map(([x, y]) => [x * kx, y * ky] as [number, number]) }))
     const band = mrzBand(items)
@@ -59,10 +59,12 @@ export async function recognize(image: Blob | ImageBitmap, onModelReady?: () => 
 // ponytail: 2400 px kept the printed words of every sample tried, a two-page spread included; lower it if photos allow.
 const PAGE_SIDE = 2400
 
-// The detector scores a box by how sure it is of the print inside, and drops it under 0.6. A name line is mostly thin
-// fillers: on a photocopy it scored less, and was dropped on the page and in the band alike. The band holds nothing
-// but the MRZ, so a faint box there is a line of it.
-// ponytail: 0.3 found the line on the one photocopy seen; the page pass keeps 0.6, where faint boxes are background.
+// The detector scores a box by how sure it is of the print inside, and drops it under 0.6. MRZ lines scored less on
+// a photocopy (its name line, mostly thin fillers) and on grey, overexposed and tilted copies of a good photo (both
+// lines), which left nothing to find the MRZ by. The band holds nothing but the MRZ, so a faint box there is a line
+// of it; on the page a faint box may be background, and each one costs a read.
+// ponytail: measured on /eval.html. The page lost no line at 0.5 and takes 0.4 for margin; 0.3 found the photocopy's line.
+const PAGE_BOX_THRESH = 0.4
 const BAND_BOX_THRESH = 0.3
 
 // x, y, w, h are in the frame turned along the MRZ, whose x axis is the unit vector (ux, uy).

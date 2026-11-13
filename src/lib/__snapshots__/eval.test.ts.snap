@@ -3,7 +3,7 @@
 exports[`parser baseline on synthetic misreads at rate 0.005 1`] = `
 {
   "cases": 300,
-  "exact": 218,
+  "exact": 240,
   "fields": {
     "birthDate": {
       "right": 260,
@@ -18,8 +18,8 @@ exports[`parser baseline on synthetic misreads at rate 0.005 1`] = `
       "wrong": 2,
     },
     "firstName": {
-      "right": 232,
-      "wrong": 28,
+      "right": 256,
+      "wrong": 4,
     },
     "issuedBy": {
       "right": 260,
@@ -50,7 +50,7 @@ exports[`parser baseline on synthetic misreads at rate 0.005 1`] = `
 exports[`parser baseline on synthetic misreads at rate 0.02 1`] = `
 {
   "cases": 300,
-  "exact": 108,
+  "exact": 168,
   "fields": {
     "birthDate": {
       "right": 251,
@@ -65,8 +65,8 @@ exports[`parser baseline on synthetic misreads at rate 0.02 1`] = `
       "wrong": 6,
     },
     "firstName": {
-      "right": 146,
-      "wrong": 111,
+      "right": 230,
+      "wrong": 27,
     },
     "issuedBy": {
       "right": 257,
@@ -97,7 +97,7 @@ exports[`parser baseline on synthetic misreads at rate 0.02 1`] = `
 exports[`parser baseline on synthetic misreads at rate 0.05 1`] = `
 {
   "cases": 300,
-  "exact": 41,
+  "exact": 96,
   "fields": {
     "birthDate": {
       "right": 255,
@@ -112,8 +112,8 @@ exports[`parser baseline on synthetic misreads at rate 0.05 1`] = `
       "wrong": 18,
     },
     "firstName": {
-      "right": 78,
-      "wrong": 194,
+      "right": 210,
+      "wrong": 62,
     },
     "issuedBy": {
       "right": 267,
